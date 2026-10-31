@@ -1,7 +1,1 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { Sidebar } from "../components/sidebar";
-export const metadata: Metadata = { title:"NetCoop — Network Operations", description:"Evidence-first campus network diagnostics" };
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><div className="shell"><Sidebar/><main className="content">{children}</main></div></body></html>;
-}
+import type {Metadata} from "next";import "./globals.css";import {Shell} from "../components/shell";export const metadata:Metadata={title:"NETCOOP | Campus Network Command",description:"IIT Bhubaneswar synthetic network operations and evidence-based diagnostics"};export default function Layout({children}:{children:React.ReactNode}){return <html lang="en"><body><Shell>{children}</Shell></body></html>}
