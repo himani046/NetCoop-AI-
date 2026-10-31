@@ -138,3 +138,18 @@ python -m pytest tests/test_batch.py -v
 ```
 
 The output contains summary counts, per-incident reports, validation warnings, and agent message histories. This is file-based batch processing; SQLite persistence is **not yet implemented**. The sample batch is an illustrative set of three cases rather than a collection exported from your Colab notebook.
+
+## SQLite persistence and incident history
+
+NetCoop AI stores completed workflow runs without changing the five-agent LangGraph architecture. The local SQLite database is initialized automatically when persistence is enabled.
+
+```bash
+python -m pip install -e '.[test]'
+python main.py --batch data/colab_batch.json --db data/netcoop.db --output reports/latest.json
+python main.py --history --db data/netcoop.db
+python main.py --show-incident 1 --db data/netcoop.db
+python -m pytest tests/test_database.py -v
+streamlit run app.py
+```
+
+The dashboard supports saving diagnoses and browsing stored reports with agent-message history. Each execution has a unique internal database ID, even if external incident IDs repeat. Files ending in `.db` are intentionally excluded from Git. See `src/database/README.md` for the schema and limitations. SQLite is a local demonstration store, not an operational campus network monitoring service.
