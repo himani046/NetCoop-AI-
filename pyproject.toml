@@ -4,10 +4,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "netcoop-ai"
 version = "1.0.0"
+description = "Evidence-driven interoperable multi-agent campus network diagnosis"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.5,<3", "langgraph>=0.2", "langchain-core>=0.3", "langchain>=0.3", "streamlit>=1.36"]
+dependencies = ["pydantic>=2.5,<3", "langgraph>=0.2", "langchain-core>=0.3", "langchain>=0.3", "streamlit>=1.36", "networkx>=3.0"]
 [project.optional-dependencies]
 test = ["pytest>=8"]
+llm-openai = ["langchain-openai>=0.3"]
 [tool.setuptools.packages.find]
 include = ["src*"]
 [tool.pytest.ini_options]
