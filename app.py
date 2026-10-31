@@ -11,7 +11,7 @@ from src.graph.workflow import diagnose
 from src.utils.synthetic_data import scenarios
 from src.database.session import session_factory
 from src.database.repository import save_incident, list_incidents, get_incident
-from src.database.telemetry_inventory import parse_telemetry_batch, latest_device_records, observation_time, describe_observation
+from src.database.telemetry_inventory import parse_telemetry_batch, latest_device_records, observation_time, describe_observation, latest_device_metrics
 
 st.set_page_config(page_title="NetCoop | Network operations", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -429,6 +429,42 @@ elif page=="Campus map":
             st.info("Import telemetry to build a device inventory.")
     except Exception as exc:
         st.warning(f"Inventory unavailable: {type(exc).__name__}: {exc}")
+    st.subheader("Device metrics & interpretations")
+    st.caption("Expand a device to inspect all metrics from its latest saved timestamp. Red = anomaly threshold, yellow = early warning, green = normal, grey = missing or no defined baseline.")
+    if inventory:
+        with session_factory(db_path)() as metric_session:
+            for device in inventory:
+                device_name = device["device_id"]
+                label = device["display_status"]
+                with st.expander(f'{device_name}  ·  {label}  ·  {device["timestamp"] or "Undated"}'):
+                    st.caption(f'Latest observation: {device["timestamp"] or "Unknown"} UTC · {device["observation_count"]} saved reading(s)')
+                    metrics = latest_device_metrics(metric_session, device["record_id"])
+                    groups = [
+                        ("Performance", {"link_utilization_pct", "latency_ms", "packet_loss_pct", "jitter_ms", "throughput_mbps"}),
+                        ("Infrastructure", {"cpu_pct", "memory_pct", "queue_drops", "crc_errors"}),
+                        ("Connectivity", {"rssi_dbm", "snr_db", "retransmissions_pct", "dhcp_timeout_pct", "dns_latency_ms", "gateway_ping_ms"}),
+                    ]
+                    palette = {"red": "#b42318", "yellow": "#98640c", "green": "#147d50", "gray": "#66788b"}
+                    for group, selected_metrics in groups:
+                        st.markdown(f"**{group}**")
+                        filtered = [m for m in metrics if m["metric"] in selected_metrics]
+                        for m in filtered:
+                            color = palette[m["level"]]
+                            shown = "Not available" if m["value"] is None else f'{m["value"]:g} {m["unit"]}'
+                            safe_label = m["label"]
+                            safe_meaning = m["meaning"]
+                            st.markdown(
+                                f'<div style="display:grid;grid-template-columns:minmax(160px,1fr) minmax(100px,0.6fr) minmax(170px,1.6fr);align-items:center;gap:12px;border-bottom:1px solid #e5ebf0;padding:8px 4px;font-size:13px">'
+                                f'<span>{safe_label}</span><b style="color:{color}">{shown}</b>'
+                                f'<span style="color:{color}">{safe_meaning}</span></div>',
+                                unsafe_allow_html=True
+                            )
+                        st.write("")
+                    if device.get("previous_fault"):
+                        st.warning(f'Previous {device["previous_fault"].replace("_", " ")} fault has not been verified cleared by this observation.')
+    else:
+        st.info("No device metrics stored yet. Import telemetry to populate the panels.")
+
     st.subheader("Device location assignments")
     if inventory:
         faults=[r for r in inventory if r["status"]=="diagnosed"]
