@@ -127,3 +127,14 @@ files.download("network_telemetry.json")
 ```
 
 If the notebook uses another variable name, replace `telemetry` with that variable. The top-level values override nested measurements with the same key, and generic `interface_errors` are **not** automatically classified as CRC faults. Input `status` is treated as an external label rather than diagnostic evidence.
+
+## Batch telemetry diagnosis
+
+Batch CLI accepts a JSON array, an object containing a `records` array, CSV, or JSON Lines. Each record is processed by the original five-role LangGraph workflow. Individual input errors are recorded without discarding other results.
+
+```bash
+python main.py --batch data/colab_batch.json --output reports/batch_results.json
+python -m pytest tests/test_batch.py -v
+```
+
+The output contains summary counts, per-incident reports, validation warnings, and agent message histories. This is file-based batch processing; SQLite persistence is **not yet implemented**. The sample batch is an illustrative set of three cases rather than a collection exported from your Colab notebook.
