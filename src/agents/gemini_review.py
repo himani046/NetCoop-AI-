@@ -21,7 +21,7 @@ def verified_metric_names(citations: list[str], telemetry: dict) -> list[str]:
             key = value
         else:
             match = re.fullmatch(
-                r"([a-zA-Z_][a-zA-Z_0-9]*)\\s*:\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))",
+                r"([a-zA-Z_][a-zA-Z_0-9]*)\s*:\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))",
                 value,
             )
             if not match:
