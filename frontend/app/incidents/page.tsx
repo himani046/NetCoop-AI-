@@ -1,0 +1,21 @@
+"use client";
+import {useEffect,useState} from "react";
+import Link from "next/link";
+import {getJSON,pretty} from "../../lib/api";
+import {Status} from "../../components/status";
+type Report={recommended_actions:string[];limitations:string[];supporting_evidence:{metric:string;value:unknown;interpretation:string}[]};
+type Incident={record_id:number;incident_id:string;device_id:string;created_at:string;status:string;root_cause:string;evidence_support:number;report:Report};
+type Breakdown={applicable:boolean;score:number|null;raw_weighted_severity:number|null;missing_evidence_penalty:number;conflict_penalty:string;score_cap:number;items:{metric:string;observed_value:unknown;severity:string;weight:number;severity_factor:number;weighted_value:number}[];note:string;reason?:string};
+export default function IncidentDesk(){
+ const [items,setItems]=useState<Incident[]>([]),[filter,setFilter]=useState("all"),[selected,setSelected]=useState<number|null>(null),[breakdown,setBreakdown]=useState<Breakdown|null>(null),[error,setError]=useState("");
+ useEffect(()=>{getJSON<Incident[]>("/api/intelligence/incidents").then(r=>{setItems(r);if(r.length)setSelected(r[0].record_id)}).catch(e=>setError(String(e)))},[]);
+ useEffect(()=>{if(selected===null)return;setBreakdown(null);getJSON<Breakdown>("/api/incidents/"+selected+"/evidence").then(setBreakdown).catch(e=>setError(String(e)))},[selected]);
+ const active=items.find(i=>i.record_id===selected);
+ const visible=items.filter(i=>filter==="all"||i.status===filter);
+ return <><div className="eyebrow">04 / INCIDENT COMMAND</div><h1 className="heading">Evidence before assumptions.</h1><p className="sub">Review saved diagnoses, operational recommendations, and the exact evidence items used by specialists.</p>
+ {error&&<p className="error">{error}</p>}
+ <div className="incident-filters">{["all","diagnosed","healthy","inconclusive"].map(s=><button className={filter===s?"selected":""} key={s} onClick={()=>setFilter(s)}>{pretty(s)}</button>)}</div>
+ <div className="incident-layout"><div className="incident-list">{visible.map(i=><button key={i.record_id} className={"incident-item "+(selected===i.record_id?"selected":"")} onClick={()=>setSelected(i.record_id)}><div className="smallmono">{i.incident_id}</div><b>{i.device_id}</b><Status status={i.status}/><span className="smallmono">{i.created_at}</span></button>)}{!visible.length&&<div className="panel">No incidents in this category.</div>}</div>
+ <div className="incident-inspector">{active?<><section className="panel"><div className="smallmono">ROOT CAUSE / SAVED REPORT</div><h2>{pretty(active.root_cause)}</h2><Status status={active.status}/><div className="incident-score">{active.status==="diagnosed"?(active.evidence_support*100).toFixed(2)+"%":"—"}<small>Fault evidence support · not a probability</small></div><div className="smallmono">RECOMMENDED ACTIONS</div>{active.report.recommended_actions.map((a,i)=><div className="action-row" key={i}><span>{String(i+1).padStart(2,"0")}</span>{a}</div>)}<div className="smallmono">LIMITATIONS</div>{active.report.limitations.map((x,i)=><p className="sub" key={i}>{x}</p>)}<Link className="tag" href={"/agents?record="+active.record_id}>OPEN FIVE-AGENT TRACE ↗</Link></section>
+ <section className="panel"><div className="smallmono">DETERMINISTIC SCORING AUDIT</div><h2>Where the number comes from</h2>{breakdown?.applicable?<><p className="sub">Severity-weighted evidence and documented penalties.</p><div className="evidence-rows">{breakdown.items.map((m,i)=><div className="evidence-line" key={i}><strong>{pretty(m.metric)}</strong><span>{String(m.observed_value)} · {m.severity}</span><small>WEIGHT {m.weight} × SEVERITY {m.severity_factor} = {m.weighted_value}</small></div>)}</div><p>Weighted severity: <b>{breakdown.raw_weighted_severity===null?"—":(breakdown.raw_weighted_severity*100).toFixed(2)+"%"}</b></p><p>Missing evidence penalty: <b>{(breakdown.missing_evidence_penalty*100).toFixed(1)}%</b></p><p>Conflict penalty: <b>{breakdown.conflict_penalty}</b></p><p className="map-disclaimer">{breakdown.note}</p></>:<p className="sub">{breakdown?.reason||"Select an incident to load its explanation."}</p>}</section></>:<p className="panel">Choose an incident.</p>}</div></div></>;
+}
