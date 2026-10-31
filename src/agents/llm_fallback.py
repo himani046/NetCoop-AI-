@@ -1,6 +1,5 @@
 """Advisory AI reasoning. Never overrides validated deterministic diagnosis."""
 import os
-from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 KNOWN_CAUSES = {"link_congestion","physical_interface_fault","weak_wifi_signal",
@@ -27,8 +26,8 @@ def structured_second_opinion(telemetry: dict, findings: list[dict],
     if not model:
         return None, "AI disabled: NETCOOP_LLM_MODEL not configured"
     try:
-        from langchain.chat_models import init_chat_model
-        llm = init_chat_model(model, temperature=0).with_structured_output(SecondOpinion)
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        llm = ChatGoogleGenerativeAI(model=model).with_structured_output(SecondOpinion)
         allowed = {key: val for key,val in telemetry.items()
                    if isinstance(val, (int,float)) and not isinstance(val,bool)}
         prompts = [
