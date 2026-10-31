@@ -23,8 +23,9 @@ export function SatelliteMap({compact=false}:{compact?:boolean}){
  },[satelliteStyle]);
  useEffect(()=>{if(!map.current||!snapshot)return;markers.current.forEach(m=>m.remove());markers.current=[];
  for(const item of snapshot.regions){const root=document.createElement("button");root.type="button";root.className="site-marker "+item.status;root.style.setProperty("--marker",colors[item.status]);root.setAttribute("aria-label",item.name+": "+item.status);root.innerHTML='<span class="site-pulse"></span><span class="site-core"></span>';
+  const label=document.createElement("span");label.className="site-name";label.textContent=item.name;root.appendChild(label);
   root.addEventListener("click",()=>setSelected(item));
-  root.addEventListener("mouseenter",()=>{root.title=item.name+" — "+item.devices.length+" device(s) · "+item.status});
+  root.addEventListener("mouseenter",()=>{root.title=item.name+" — "+item.devices.length+" device(s) · "+item.status;setSelected(item)});
   const marker=new maplibregl.Marker({element:root}).setLngLat([item.longitude,item.latitude]).addTo(map.current!);markers.current.push(marker)}
  },[snapshot]);
  async function assign(){if(!device)return;setSaving(true);try{await postJSON("/api/map/assign",{device_id:device,region_id:region||null});await refresh();setSelected(null)}catch(e){setError(String(e))}finally{setSaving(false)}}
