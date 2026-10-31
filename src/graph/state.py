@@ -10,6 +10,7 @@ class DiagnosticState(TypedDict,total=False):
  cta_finding:dict[str,Any]
  messages:Annotated[list[dict[str,Any]],operator.add]
  validated_messages:list[dict[str,Any]]
+ gemini_agent_reviews:Annotated[list[dict[str,Any]],operator.add]
  conflicts_detected:bool
  resolution_notes:list[str]
  decision:dict[str,Any]
