@@ -87,3 +87,43 @@ An LLM is advisory: it can provide structured alternatives and explanations duri
 2. Run interface fault to show CRC evidence winning over latency-only suspicion.
 3. Run malformed input to expose normalization warnings.
 4. Show agent messages, arbitration path and final JSON in Streamlit.
+
+## Organizer Colab JSON (nested or flat)
+
+The application accepts the original Colab shape directly, without a manual conversion step:
+
+```json
+{
+  "timestamp": "2026-10-31T16:21:56.896760Z",
+  "device_id": "SW_CAMPUS_8",
+  "metrics": {
+    "cpu_utilization_pct": 99.9,
+    "link_utilization_pct": 100.0,
+    "packet_loss_pct": 16.4,
+    "latency_ms": 635.46,
+    "queue_drops": 10730,
+    "interface_errors": 160
+  },
+  "status": "Critical"
+}
+```
+
+Save the object to `network_telemetry.json`, then run:
+
+```bash
+python main.py --file data/colab_original_nested.json
+python main.py --file data/colab_sample.json
+python -m pytest tests/test_colab_input.py -v
+```
+
+For Colab's generated Python variable `telemetry`, export without retyping values:
+
+```python
+import json
+from google.colab import files
+with open("network_telemetry.json", "w", encoding="utf-8") as f:
+    json.dump(telemetry, f, indent=2, default=str)
+files.download("network_telemetry.json")
+```
+
+If the notebook uses another variable name, replace `telemetry` with that variable. The top-level values override nested measurements with the same key, and generic `interface_errors` are **not** automatically classified as CRC faults. Input `status` is treated as an external label rather than diagnostic evidence.
