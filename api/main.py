@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.database.models import Incident
+from src.database.models import Incident, Base
+from api.campus import DemoAssignment, REGIONS, campus_snapshot
 from src.database.repository import get_incident, list_incidents, save_incident
 from src.database.session import session_factory
 from src.database.telemetry_inventory import (
@@ -160,12 +161,29 @@ def import_records(input: ImportInput):
             results.append({"index":index,"device_id":raw.get("device_id"),"error":type(exc).__name__})
     return {"count":len(results),"results":results}
 
+class AssignmentInput(BaseModel):
+    device_id: str = Field(min_length=1, max_length=200)
+    region_id: str | None = None
+
 @app.get("/api/map/regions")
 def regions():
-    # Reference place names only; no asserted live campus connectivity or building mappings.
-    return {"live":False,"regions":[
-        {"id":"main","name":"Main Building","latitude":20.14827,"longitude":85.67108},
-        {"id":"lalitgiri","name":"Lalitgiri Lecture Hall","latitude":20.14684,"longitude":85.67411},
-        {"id":"pushpagiri","name":"Pushpagiri Lecture Hall","latitude":20.14640,"longitude":85.67558},
-        {"id":"labs","name":"Lab Complex","latitude":20.14819,"longitude":85.67761}
-    ],"device_assignments":[]}
+    with db_session() as session:
+        return campus_snapshot(session, latest_device_records(session))
+
+@app.post("/api/map/assign")
+def assign_region(input: AssignmentInput):
+    if input.region_id is not None and input.region_id not in {r["id"] for r in REGIONS}:
+        raise HTTPException(422, "Unknown campus reference region")
+    with db_session() as session:
+        if not any(d["device_id"] == input.device_id for d in latest_device_records(session)):
+            raise HTTPException(404, "Device not found in telemetry inventory")
+        with session.begin_nested():
+            stored = session.get(DemoAssignment, input.device_id)
+            if input.region_id is None:
+                if stored: session.delete(stored)
+            elif stored:
+                stored.region_id = input.region_id
+            else:
+                session.add(DemoAssignment(device_id=input.device_id, region_id=input.region_id))
+        session.commit()
+    return {"device_id": input.device_id, "region_id": input.region_id, "mode": "manual_demo_only"}
