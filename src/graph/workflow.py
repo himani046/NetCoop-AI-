@@ -13,7 +13,7 @@ from src.agents.connectivity import ConnectivityAgent
 from src.agents.correlation import correlate
 from src.agents.reporting import report,markdown_report
 from src.agents.llm_fallback import structured_second_opinion
-from src.agents.gemini_review import review_specialist
+from src.agents.gemini_review import review_specialist,review_report
 from src.utils.calibration import calibrated_probability,load_calibration
 def normalization_node(state:DiagnosticState)->dict:
  t,w=normalize(state.get("raw_telemetry",{}))
@@ -60,7 +60,8 @@ def reporting_node(state:DiagnosticState)->dict:
    output["calibrated_correctness_probability"]=p
    if p is None:output["limitations"].append("Insufficient independent calibration samples in score bin")
   except (ValueError,KeyError,OSError,TypeError) as exc:output["limitations"].append(f"Invalid calibration model: {exc}")
- return {"final_report":output,"markdown_report":markdown_report(r),"messages":[{"message_type":"final_report","sender":"reporting_agent","recipient":"operator","correlation_id":state["incident_id"],"status":r.status}]}
+ narrative,report_warning=review_report(output) if os.getenv("NETCOOP_LLM_MODEL") else (None,None)
+ return {"gemini_report_review":narrative,"gemini_report_warning":report_warning,"final_report":output,"markdown_report":markdown_report(r),"messages":[{"message_type":"final_report","sender":"reporting_agent","recipient":"operator","correlation_id":state["incident_id"],"status":r.status}]}
 def build_graph():
  g=StateGraph(DiagnosticState)
  g.add_node("normalize",normalization_node)
