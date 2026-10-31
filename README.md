@@ -153,3 +153,21 @@ streamlit run app.py
 ```
 
 The dashboard supports saving diagnoses and browsing stored reports with agent-message history. Each execution has a unique internal database ID, even if external incident IDs repeat. Files ending in `.db` are intentionally excluded from Git. See `src/database/README.md` for the schema and limitations. SQLite is a local demonstration store, not an operational campus network monitoring service.
+
+## Evidence-grounded AI advisory review (optional)
+
+Install the provider integration and set an API key locally. The core five-agent system and all tests continue to work without a key.
+
+```bash
+python -m pip install -e '.[test,llm-openai]'
+export OPENAI_API_KEY="YOUR_KEY_FROM_PROVIDER"
+export NETCOOP_LLM_MODEL="openai:gpt-5-mini"
+python main.py --scenario link_congestion
+streamlit run app.py
+```
+
+Do not commit credentials. AI reviews are advisory Pydantic-validated structured outputs with suggested cause, explanation, alternative causes, an uncertainty flag and referenced metric names. Reviews cannot override the deterministic diagnosis or its evidence-support score. Invalid or unavailable API responses gracefully fall back to the normal result. The required final JSON retains its original hackathon schema; the review appears separately in the LangGraph diagnostic state, arbitration notes and Streamlit dashboard.
+
+With the model configured, a review runs after correlation for ordinary cases and after bounded arbitration for conflicting cases. Without configuration, diagnostics remain offline and deterministic. Mocked tests in `tests/test_ai_reasoning.py` exercise success, disagreement and failure without contacting a provider.
+
+**Caution:** The mock tests do not prove a live API model integration. Verify provider credentials, model availability, latency and billing before the demonstration.
