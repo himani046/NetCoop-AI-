@@ -18,7 +18,7 @@ def test_ai_advisory_retains_authoritative_cause(monkeypatch):
     state=diagnose(scenarios()["link_congestion"],"INC-AI-TEST")
     report=state["final_report"]
     assert report["suspected_root_cause"] == "link_congestion"
-    assert report["ai_review"]["suggested_cause"] == "device_overload"
+    assert state["decision"]["ai_review"]["suggested_cause"] == "device_overload"
     assert any("no automatic override" in note for note in state["resolution_notes"])
 
 def test_ai_failure_is_nonfatal(monkeypatch):
