@@ -89,7 +89,9 @@ def evaluate(records):
             state = diagnose(sample["telemetry"], sample["id"])
             report = state["final_report"]
             predicted = report["suspected_root_cause"] if report["status"] == "diagnosed" else "inconclusive"
-            # Normal operation is a valid no-fault outcome, rather than an incorrect abstention.
+            if report["status"] == "healthy":
+                predicted = "normal"
+            # Backwards compatibility for older reports with no-fault abstentions.
             if predicted == "inconclusive" and not any(
                 finding.get("primary_hypothesis") for finding in
                 (state["tpa_finding"], state["iha_finding"], state["cta_finding"])
