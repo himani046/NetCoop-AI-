@@ -13,6 +13,7 @@ from src.agents.connectivity import ConnectivityAgent
 from src.agents.correlation import correlate
 from src.agents.reporting import report,markdown_report
 from src.agents.llm_fallback import structured_second_opinion
+from src.agents.gemini_review import review_specialist
 from src.utils.calibration import calibrated_probability,load_calibration
 def normalization_node(state:DiagnosticState)->dict:
  t,w=normalize(state.get("raw_telemetry",{}))
@@ -21,7 +22,8 @@ def agent_node(agent,field):
  def run(state:DiagnosticState):
   f=agent.analyze(state["normalized_telemetry"])
   msg=AgentEnvelope(correlation_id=state["incident_id"],sender=agent.agent_id,recipient="correlation_agent",payload=f)
-  return {field:f.model_dump(mode="json"),"messages":[msg.model_dump(mode="json")]}
+  review,warning=review_specialist(agent.agent_id,state["normalized_telemetry"],f.model_dump(mode="json")) if os.getenv("NETCOOP_LLM_MODEL") else (None,None)
+  return {field:f.model_dump(mode="json"),"messages":[msg.model_dump(mode="json")],"gemini_agent_reviews":[{"agent_id":agent.agent_id,"review":review,"warning":warning}] if review or warning else []}
  return run
 def decision_node(state:DiagnosticState,arbitration:bool=False)->dict:
  raw_messages=[m for m in state.get("messages",[]) if isinstance(m,dict) and "payload" in m]
