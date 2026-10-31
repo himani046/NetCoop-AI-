@@ -133,7 +133,7 @@ def report_detail(report, normalized=None):
     report_brief(report, normalized)
     st.divider()
     a,b,c = st.columns(3)
-    a.metric("Fault evidence support", f'{report["confidence"]:.1%}')
+    a.metric("Fault evidence support", evidence_display(report["status"], report["confidence"]))
     b.metric("Affected devices", len(report.get("affected_devices", [])))
     c.metric("Evidence measurements", len(report.get("supporting_evidence", [])))
     st.caption("Evidence support is a heuristic fault score, not a calibrated probability. For healthy cases, 0% means no fault evidence.")
@@ -230,7 +230,7 @@ if page=="Overview":
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Saved diagnostic runs",len(history))
     m2.metric("Latest status",report["status"].upper() if report else "NO RUN")
-    m3.metric("Fault support",f'{report["confidence"]:.1%}' if report else "—")
+    m3.metric("Fault support",evidence_display(report["status"], report["confidence"]) if report else "—")
     m4.metric("Active live monitors","0")
     st.caption("Live monitoring is not connected. Saved results are historical synthetic diagnostic runs.")
     if report:
@@ -279,7 +279,7 @@ elif page=="Run diagnosis":
         if state:
             st.markdown('<div class="nc-eyebrow">LATEST ANALYSIS</div>',unsafe_allow_html=True)
             report_brief(state["final_report"],state.get("normalized_telemetry"))
-            st.metric("Fault evidence support",f'{state["final_report"]["confidence"]:.1%}')
+            st.metric("Fault evidence support",evidence_display(state["final_report"]["status"], state["final_report"]["confidence"]))
             st.caption("Heuristic fault-evidence score · not calibrated correctness probability")
             for a in state["final_report"].get("recommended_actions",[]):
                 st.markdown("✓ "+a)
@@ -338,7 +338,7 @@ elif page=="Import telemetry":
                         r=state_new["final_report"]
                         results.append({"Device ID":device,"Timestamp (UTC)":timestamp.isoformat(),
                                         "Status":describe_observation(r["status"],state_new["normalized_telemetry"],r)[0],"Diagnosis":nice_cause(r["suspected_root_cause"]) if r["status"]!="inconclusive" else describe_observation(r["status"],state_new["normalized_telemetry"],r)[1],
-                                        "Evidence support":f'{r["confidence"]:.1%}',"Record":pk,
+                                        "Evidence support":evidence_display(r["status"], r["confidence"]),"Record":pk,
                                         "Warnings":len(warnings)})
                         st.session_state["diagnostic_state"]=state_new
                     except Exception as exc:
@@ -421,7 +421,7 @@ elif page=="Campus map":
                            "Site":r["site"],"Status":r["display_status"],
                            "Assessment":r["status_detail"],
                            "Fault":nice_cause(r["root_cause"]) if r["status"]=="diagnosed" else (r["previous_fault"] or "—"),
-                           "Evidence":f'{r["evidence_support"]:.1%}',
+                           "Evidence":evidence_display(r["status"], r["evidence_support"]),
                            "Record":r["record_id"]} for r in inventory],
                          use_container_width=True,hide_index=True)
             st.caption("Latest means highest valid observation timestamp per device, not upload order. Undated legacy runs are labeled.")
