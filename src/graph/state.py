@@ -9,6 +9,7 @@ class DiagnosticState(TypedDict,total=False):
  iha_finding:dict[str,Any]
  cta_finding:dict[str,Any]
  messages:Annotated[list[dict[str,Any]],operator.add]
+ validated_messages:list[dict[str,Any]]
  conflicts_detected:bool
  resolution_notes:list[str]
  decision:dict[str,Any]
