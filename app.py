@@ -358,32 +358,37 @@ elif page=="Campus map":
     # Explicit mapping, rather than inferring physical position from device names.
     # An operator may explicitly assign a test device to a known POI for demonstration.
     mapping = st.session_state.setdefault("demo_device_locations", {})
-    if report and report.get("affected_devices"):
-        with st.expander("Assign a test device to a campus location (demo only)"):
-            incident_device = st.selectbox("Device", report["affected_devices"], key="map_device")
-            selected_place = st.selectbox("Campus place", ["Not mapped"]+[p["name"] for p in CAMPUS_PLACES], key="map_place")
+    try:
+        with session_factory(db_path)() as session:
+            inventory = latest_device_records(session)
+    except Exception as exc:
+        inventory = []
+        st.warning(f"Device inventory unavailable: {type(exc).__name__}: {exc}")
+    if inventory:
+        with st.expander("Assign a device to a campus place (simulated)"):
+            chosen_device = st.selectbox("Device ID", [r["device_id"] for r in inventory],key="map_device")
+            chosen_place = st.selectbox("Campus place",["Not mapped"]+[p["name"] for p in CAMPUS_PLACES],key="map_place")
             if st.button("Apply demo location"):
-                if selected_place=="Not mapped":
-                    mapping.pop(incident_device,None)
-                else:
-                    mapping[incident_device]=selected_place
+                if chosen_place=="Not mapped": mapping.pop(chosen_device,None)
+                else: mapping[chosen_device]=chosen_place
                 st.rerun()
-            st.caption("This is a manual demonstration assignment, not a discovered network link or verified installed-device position.")
+            st.caption("Manual map association, not a verified real-world network installation.")
     places=[{**p,"color":[0,126,134,200],"radius":65,"state":"Reference location"} for p in CAMPUS_PLACES]
-    affected = report.get("affected_devices",[]) if report else []
-    matched = [d for d in affected if mapping.get(d) in {p["name"] for p in places}]
-    if matched and report["status"]=="diagnosed":
-        for place in places:
-            devices=[d for d in matched if mapping[d]==place["name"]]
-            if devices:
-                place["color"]=[211,48,53,230]
-                place["radius"]=110
-                place["state"]="⚠ SIMULATED FAULT · "+", ".join(devices)
-    elif matched and report["status"]=="healthy":
-        for place in places:
-            if any(mapping[d]==place["name"] for d in matched):
-                place["color"]=[15,139,99,220]
-                place["state"]="Healthy in latest simulated test"
+    for place in places:
+        attached=[r for r in inventory if mapping.get(r["device_id"])==place["name"]]
+        faults=[r for r in attached if r["status"]=="diagnosed"]
+        unknowns=[r for r in attached if r["status"]=="inconclusive"]
+        if faults:
+            place["color"]=[211,48,53,230]
+            place["radius"]=110
+            place["state"]="⚠ SIMULATED FAULT · "+", ".join(r["device_id"] for r in faults)
+        elif unknowns:
+            place["color"]=[194,132,37,230]
+            place["state"]="INCONCLUSIVE · "+", ".join(r["device_id"] for r in unknowns)
+        elif attached:
+            place["color"]=[15,139,99,220]
+            place["state"]="HEALTHY in latest simulated reading · "+", ".join(r["device_id"] for r in attached)
+    matched=[r["device_id"] for r in inventory if r["device_id"] in mapping]
     alert_places = [{**p, "alert_symbol":"⚠"} for p in places if p["state"].startswith("⚠")]
     st.pydeck_chart(pdk.Deck(
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
@@ -405,8 +410,6 @@ elif page=="Campus map":
 
     st.subheader("Latest telemetry by device ID")
     try:
-        with session_factory(db_path)() as session:
-            inventory=latest_device_records(session)
         if inventory:
             st.dataframe([{"Device ID":r["device_id"],"Observed (UTC)":r["timestamp"] or "Unknown",
                            "Site":r["site"],"Status":r["status"].upper(),
