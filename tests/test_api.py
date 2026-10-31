@@ -74,3 +74,34 @@ def test_demo_campus_assignment_and_latest_state(client):
     assert client.post("/api/map/assign",json={"device_id":"SW-CAMPUS","region_id":None}).status_code==200
     cleared=client.get("/api/map/regions").json()
     assert next(r for r in cleared["regions"] if r["id"]=="labs")["status"]=="unmonitored"
+
+def test_phase3_playback_sorting_and_investigation_trace(client):
+    earlier={"device_id":"SW-PLAY","timestamp":"2026-10-31T10:00:00Z",
+             "link_utilization_pct":94,"latency_ms":280,"packet_loss_pct":12,"queue_drops":160}
+    later={"device_id":"SW-PLAY","timestamp":"2026-10-31T11:00:00Z",
+           "link_utilization_pct":31,"latency_ms":14,"packet_loss_pct":0,"queue_drops":0}
+    newest=client.post("/api/diagnose",json={"telemetry":later}).json()
+    oldest=client.post("/api/diagnose",json={"telemetry":earlier}).json()
+    response=client.get("/api/playback/events")
+    assert response.status_code==200,response.text
+    events=response.json()["events"]
+    assert [x["record_id"] for x in events]==[oldest["record_id"],newest["record_id"]]
+    assert events[0]["status"]=="diagnosed"
+    assert len(client.get("/api/playback/events?limit=1").json()["events"])==1
+    detail=client.get("/api/incidents/"+str(oldest["record_id"])+"/investigation")
+    assert detail.status_code==200,detail.text
+    body=detail.json()
+    assert len(body["steps"])==5
+    assert body["steps"][0]["id"]=="performance_agent"
+    assert body["steps"][3]["id"]=="correlation_agent"
+    assert body["report"]["suspected_root_cause"]=="link_congestion"
+    assert any(s["messages"] for s in body["steps"])
+    assert client.get("/api/incidents/999999/investigation").status_code==404
+    assert client.get("/api/playback/events?limit=501").status_code==422
+
+def test_phase3_playback_excludes_undated_records(client):
+    r=client.post("/api/diagnose",json={"telemetry":{"device_id":"NO-TIME","latency_ms":20}})
+    assert r.status_code==200,r.text
+    response=client.get("/api/playback/events").json()
+    assert response["events"]==[]
+    assert response["excluded_undated"]==1
