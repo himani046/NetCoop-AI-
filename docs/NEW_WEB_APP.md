@@ -98,3 +98,22 @@ Open `/campus` and enable **Historical mode**. Play, pause, or scrub the saved t
 **Historical mapping caveat:** Only current manual assignments are stored. They are applied retroactively during replay; the app does not store historical device moves, real building footprints, or real network topology. A sequence can also be incomplete when records exceed the 500-event window or 5,000-record scan cap. Importantly, there is **no automatic region assignment** based solely on device IDs.
 
 Tests: `python -m pytest tests/test_api.py -v` now covers out-of-order uploads, time-based region transitions, unmapped devices, and endpoint input bounds. From `frontend/`, run `npm install && npm run build` and verify WebGL interaction in a browser. Free Render hosting limitations and API authentication warnings from previous phases remain in force.
+
+## Phase 5 — network intelligence and incident command
+
+New routes on the **separate Next.js** frontend:
+
+- `/incidents`: an incident command desk with status filters, latest saved root-cause report, actionable recommendations, limitations, a link to the original ACP investigation, and a severity-weighted fault-evidence explanation.
+- `/devices`: clicking **Inspect** additionally displays a per-metric historical trend chart. The historical measurements are read from each saved normalized telemetry snapshot and sorted by observation timestamp, not upload order. Charts omit missing samples rather than plotting misleading zeros; lines are visual aids between discrete samples.
+
+Read-only API routes:
+
+- `GET /api/intelligence/incidents?limit=100` (maximum 200): summarized saved incident reports.
+- `GET /api/incidents/{record_id}/evidence`: weighted evidence inputs, missing-metric penalty, and stored authoritative final support score.
+- `GET /api/devices/{device_id}/trends?limit=100` (maximum 500): timestamped numerical metric series for a device.
+
+**Scoring integrity:** The original engine computes the final score. The audit does not invent a healthy percentage or claim fault support is a statistically calibrated probability. Stored ACP messages contain specialist severity evidence but not a separate persisted arbitration/conflict-penalty parameter. Therefore the audit identifies the conflict penalty as *not persisted* and does not claim its breakdown always exactly reconstructs the final score.
+
+This phase adds no map services, paid libraries, or new data stores; the Render free-tier caveats and unauthenticated-API limitations from previous phases remain. Existing Streamlit `app.py` is unchanged.
+
+Validation: run `python -m pytest tests/test_api.py -v` and `cd frontend && npm install && npm run build`; browser verification remains required before publishing.
