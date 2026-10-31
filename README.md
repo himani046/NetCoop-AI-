@@ -276,3 +276,7 @@ For the **Campus map** device inventory, records are grouped by `device_id` and 
 Imports require a nonempty known device ID and a timezone-aware ISO 8601 timestamp. Invalid imports are rejected before processing the batch; run failures during processing are listed per record. This is a test-data device dashboard, not a production campus monitoring feed. Map red/amber/green indicators are based on each mapped device's latest persisted result; building-to-device associations must be manually specified for demonstration, and are not verified network topology.
 
 Run the tests with `python -m pytest tests/test_telemetry_inventory.py -v`.
+
+### Per-device metric inspection on Campus map
+
+Below **Latest telemetry by device ID**, expand **Device metrics & interpretations** for a device to review all 15 supported numeric fields from exactly the same latest-timestamp record used by the inventory. Metrics are grouped by Performance, Infrastructure, and Connectivity, showing observed values, units, and color-coded explanations: green normal, amber approaching a specialist anomaly threshold, red triggering a threshold, and grey missing/not assessed (including throughput where no capacity baseline is available). The amber thresholds are conservative display-only early warnings; red thresholds reflect the corresponding deterministic specialist checks. Missing metrics are never treated as normal. No real campus device status is implied by this synthetic telemetry UI.
