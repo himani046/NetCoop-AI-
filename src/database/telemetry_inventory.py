@@ -112,3 +112,56 @@ def latest_device_records(session) -> list[dict]:
             "observation_count": len(observations),
         })
     return sorted(output, key=lambda item: item["device_id"])
+
+# Display thresholds mirror the specialist-agent anomaly rules.
+# Amber thresholds are early warnings for the operator, not new diagnostic rules.
+METRIC_DISPLAY_RULES = {
+    "link_utilization_pct": ("Link utilization", "%", 75, 85, "high"),
+    "latency_ms": ("Latency", "ms", 100, 150, "high"),
+    "packet_loss_pct": ("Packet loss", "%", 1, 3, "high"),
+    "jitter_ms": ("Jitter", "ms", 25, 35, "high"),
+    "queue_drops": ("Queue drops", "count", 1, 20, "high"),
+    "cpu_pct": ("CPU utilization", "%", 75, 90, "high"),
+    "memory_pct": ("Memory utilization", "%", 75, 90, "high"),
+    "crc_errors": ("CRC errors", "count", 1, 100, "high"),
+    "rssi_dbm": ("Wi-Fi signal (RSSI)", "dBm", -70, -75, "low"),
+    "snr_db": ("Signal-to-noise ratio", "dB", 20, 15, "low"),
+    "retransmissions_pct": ("Wi-Fi retransmissions", "%", 10, 20, "high"),
+    "dhcp_timeout_pct": ("DHCP timeout", "%", 1, 50, "high"),
+    "dns_latency_ms": ("DNS latency", "ms", 250, 500, "high"),
+    "gateway_ping_ms": ("Gateway latency", "ms", 10, 20, "high"),
+    "throughput_mbps": ("Throughput", "Mbps", None, None, "context"),
+}
+
+def metric_interpretation(metric: str, value) -> tuple[str, str]:
+    """Return (green/yellow/red/gray, human explanation) for a numeric reading."""
+    if value is None:
+        return "gray", "Not measured in this observation"
+    label, unit, warn, alert, direction = METRIC_DISPLAY_RULES[metric]
+    if direction == "context":
+        return "gray", "Measured throughput; no capacity baseline supplied"
+    if direction == "low":
+        if value < alert:
+            return "red", f"Critical range — below {alert} {unit}"
+        if value < warn:
+            return "yellow", f"Approaching weak-signal threshold ({alert} {unit})"
+        return "green", "Within expected range"
+    if value >= alert if metric == "dhcp_timeout_pct" else value > alert:
+        return "red", f"Threshold exceeded ({alert} {unit})"
+    if value >= warn:
+        return "yellow", f"Elevated — approaching threshold ({alert} {unit})"
+    return "green", "Within expected range"
+
+def latest_device_metrics(session, record_id: int) -> list[dict]:
+    """Read the actual normalized snapshot underlying a device inventory row."""
+    incident = session.get(Incident, record_id)
+    if incident is None:
+        return []
+    measured = json.loads(incident.normalized_telemetry_json)
+    output = []
+    for key, (label, unit, _, _, _) in METRIC_DISPLAY_RULES.items():
+        value = measured.get(key)
+        level, meaning = metric_interpretation(key, value)
+        output.append({"metric": key, "label": label, "value": value,
+                       "unit": unit, "level": level, "meaning": meaning})
+    return output
