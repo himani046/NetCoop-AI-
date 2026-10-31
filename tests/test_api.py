@@ -105,3 +105,35 @@ def test_phase3_playback_excludes_undated_records(client):
     response=client.get("/api/playback/events").json()
     assert response["events"]==[]
     assert response["excluded_undated"]==1
+
+def test_phase4_spatial_playback_uses_timestamp_not_upload_order(client):
+    newer={"device_id":"SW-MAP","timestamp":"2026-10-31T11:00:00Z",
+           "link_utilization_pct":31,"latency_ms":14,"packet_loss_pct":0,"queue_drops":0}
+    older={"device_id":"SW-MAP","timestamp":"2026-10-31T10:00:00Z",
+           "link_utilization_pct":94,"latency_ms":280,"packet_loss_pct":12,"queue_drops":160}
+    client.post("/api/diagnose",json={"telemetry":newer})
+    client.post("/api/diagnose",json={"telemetry":older})
+    assert client.post("/api/map/assign",json={"device_id":"SW-MAP","region_id":"labs"}).status_code==200
+    result=client.get("/api/map/history")
+    assert result.status_code==200,result.text
+    frames=result.json()["frames"]
+    assert len(frames)==2
+    old_labs=next(x for x in frames[0]["regions"] if x["id"]=="labs")
+    new_labs=next(x for x in frames[1]["regions"] if x["id"]=="labs")
+    assert old_labs["status"]=="fault"
+    assert frames[0]["observed_at"]=="2026-10-31T10:00:00+00:00"
+    assert new_labs["status"]!="fault"
+    assert next(x for x in frames[0]["regions"] if x["id"]=="main")["status"]=="unmonitored"
+    assert "retroactively" in result.json()["assignment_policy"]
+    assert client.get("/api/map/history?limit=501").status_code==422
+
+
+def test_phase4_spatial_playback_no_assigned_devices(client):
+    assert client.post("/api/diagnose",json={"telemetry":{
+        "device_id":"AP-UNMAPPED","timestamp":"2026-10-31T10:00:00Z",
+        "rssi_dbm":-85,"snr_db":7,"retransmissions_pct":38}}).status_code==200
+    frames=client.get("/api/map/history").json()["frames"]
+    assert len(frames)==1
+    assert frames[0]["device_count"]==1
+    assert frames[0]["mapped_device_count"]==0
+    assert all(r["status"]=="unmonitored" for r in frames[0]["regions"])
