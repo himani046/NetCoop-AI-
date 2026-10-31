@@ -56,3 +56,21 @@ def test_import_rejects_missing_device_or_timestamp(client):
     response=client.post("/api/telemetry/import",json={"records":[{"latency_ms":5}]})
     assert response.status_code==422
     assert client.get("/api/devices/latest").json()==[]
+
+def test_demo_campus_assignment_and_latest_state(client):
+    reading={"device_id":"SW-CAMPUS","timestamp":"2026-10-31T10:00:00Z",
+             "link_utilization_pct":94,"latency_ms":280,"queue_drops":160,"packet_loss_pct":12}
+    assert client.post("/api/diagnose",json={"telemetry":reading}).status_code==200
+    initial=client.get("/api/map/regions").json()
+    assert initial["live"] is False
+    assert all(r["status"]=="unmonitored" for r in initial["regions"])
+    assert client.post("/api/map/assign",json={"device_id":"SW-CAMPUS","region_id":"labs"}).status_code==200
+    state=client.get("/api/map/regions").json()
+    labs=next(r for r in state["regions"] if r["id"]=="labs")
+    assert labs["status"]=="fault"
+    assert labs["devices"][0]["device_id"]=="SW-CAMPUS"
+    assert client.post("/api/map/assign",json={"device_id":"SW-CAMPUS","region_id":"invalid"}).status_code==422
+    assert client.post("/api/map/assign",json={"device_id":"NONEXISTENT","region_id":"labs"}).status_code==404
+    assert client.post("/api/map/assign",json={"device_id":"SW-CAMPUS","region_id":None}).status_code==200
+    cleared=client.get("/api/map/regions").json()
+    assert next(r for r in cleared["regions"] if r["id"]=="labs")["status"]=="unmonitored"
