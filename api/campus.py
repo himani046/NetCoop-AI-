@@ -30,3 +30,35 @@ def campus_snapshot(session, latest):
         enriched.append({**region,"status":state,"devices":devices})
     return {"live":False,"mode":"MANUAL DEMO ASSIGNMENTS","regions":enriched,
             "device_assignments":[{"device_id":k,"region_id":v} for k,v in sorted(placements.items())]}
+
+def historical_campus_frames(session, events):
+    """Use the same demo assignments for every historical frame; unobserved devices are absent."""
+    placements={row.device_id:row.region_id for row in session.scalars(select(DemoAssignment)).all()}
+    times=sorted({event["observed_at"] for event in events if event["observed_at"]})
+    ordered=sorted((e for e in events if e["observed_at"]),key=lambda e:(e["observed_at"],e["record_id"]))
+    current={}
+    frames=[]
+    offset=0
+    for stamp in times:
+        while offset<len(ordered) and ordered[offset]["observed_at"]<=stamp:
+            e=ordered[offset]
+            current[e["device_id"]]=e
+            offset+=1
+        grouped={r["id"]:[] for r in REGIONS}
+        for device_id,event in current.items():
+            region=placements.get(device_id)
+            if region in grouped:
+                grouped[region].append({"device_id":device_id,"status":event["status"],
+                    "root_cause":event["root_cause"],"record_id":event["record_id"],
+                    "observed_at":event["observed_at"]})
+        regions=[]
+        for region in REGIONS:
+            devices=sorted(grouped[region["id"]],key=lambda d:d["device_id"])
+            state=("fault" if any(d["status"]=="diagnosed" for d in devices)
+                else "limited" if any(d["status"]!="healthy" for d in devices)
+                else "healthy" if devices else "unmonitored")
+            regions.append({**region,"status":state,"devices":devices})
+        frames.append({"observed_at":stamp,"regions":regions,
+            "device_count":len(current),"mapped_device_count":sum(len(v) for v in grouped.values())})
+    return {"frames":frames,"live":False,"mode":"HISTORICAL SIMULATED CAMPUS",
+        "assignment_policy":"Current manual demo placements are applied retroactively; no location history is recorded."}
