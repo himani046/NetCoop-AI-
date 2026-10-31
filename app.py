@@ -422,22 +422,17 @@ elif page=="Campus map":
             st.info("Import telemetry to build a device inventory.")
     except Exception as exc:
         st.warning(f"Inventory unavailable: {type(exc).__name__}: {exc}")
-    st.subheader("Incident location & connectivity")
-    if report:
-        if report["status"]=="diagnosed":
-            if matched:
-                st.error("⚠ Simulated fault markers shown in red at manually assigned demonstration locations.")
-            else:
-                st.error(f"⚠ Simulated fault detected at {', '.join(report['affected_devices'])}. Physical campus position is not registered; no red pin is placed arbitrarily.")
-        elif report["status"]=="healthy":
-            st.success("The latest evaluated telemetry snapshot reported no detected fault. Other campus locations have not been tested.")
+    st.subheader("Device location assignments")
+    if inventory:
+        faults=[r for r in inventory if r["status"]=="diagnosed"]
+        if faults:
+            st.error(f"{len(faults)} device(s) have diagnosed faults in their latest saved measurements. Only mapped locations show red pins.")
         else:
-            st.warning("Latest evidence insufficient to determine network health.")
-        st.markdown("**Devices from latest diagnosis**")
-        for device in report["affected_devices"]:
-            place_name=mapping.get(device)
-            location_note=f"demo-assigned to {place_name}" if place_name else "location not mapped"
-            st.markdown(f"• `{device}` — {location_note}; **{report['status']}** in latest test")
+            st.info("No diagnosed faults among the latest saved device measurements.")
+        for item in inventory:
+            st.write(f'{item["device_id"]} · {mapping.get(item["device_id"], "Location not mapped")} · {item["status"].upper()}')
+    else:
+        st.caption("Import telemetry first to review per-device connectivity.")
     st.caption("Campus buildings do not imply verified network links. Register surveyed coordinates and authorized live telemetry to enable accurate location-level alerts.")
 
 elif page=="Technical records":
