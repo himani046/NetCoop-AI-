@@ -27,3 +27,12 @@ def calibrated_probability(score:float, model:dict, minimum_bin_samples:int=20)-
         if entry["lower"] <= score < entry["upper"] or score==1 and entry["upper"]==1:
             return entry["smoothed_accuracy"] if entry["count"] >= minimum_bin_samples else None
     return None
+
+
+def load_calibration(path):
+    import json
+    from pathlib import Path
+    data=json.loads(Path(path).read_text(encoding='utf-8'))
+    if data.get('method')!='binned_laplace_v1':
+        raise ValueError('Unknown calibration model')
+    return data
