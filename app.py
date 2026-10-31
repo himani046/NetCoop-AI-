@@ -296,7 +296,34 @@ elif page=="Campus map":
             "OpenStreetMap basemap · Argul permanent campus · Verified points of interest")
     st.info("Reference geography only — this app has no live campus telemetry feed or verified device-to-building mapping. A red incident marker is shown only for a device with a supplied, validated location.")
     # Explicit mapping, rather than inferring physical position from device names.
+    # An operator may explicitly assign a test device to a known POI for demonstration.
+    mapping = st.session_state.setdefault("demo_device_locations", {})
+    if report and report.get("affected_devices"):
+        with st.expander("Assign a test device to a campus location (demo only)"):
+            incident_device = st.selectbox("Device", report["affected_devices"], key="map_device")
+            selected_place = st.selectbox("Campus place", ["Not mapped"]+[p["name"] for p in CAMPUS_PLACES], key="map_place")
+            if st.button("Apply demo location"):
+                if selected_place=="Not mapped":
+                    mapping.pop(incident_device,None)
+                else:
+                    mapping[incident_device]=selected_place
+                st.rerun()
+            st.caption("This is a manual demonstration assignment, not a discovered network link or verified installed-device position.")
     places=[{**p,"color":[0,126,134,200],"radius":65,"state":"Reference location"} for p in CAMPUS_PLACES]
+    affected = report.get("affected_devices",[]) if report else []
+    matched = [d for d in affected if mapping.get(d) in {p["name"] for p in places}]
+    if matched and report["status"]=="diagnosed":
+        for place in places:
+            devices=[d for d in matched if mapping[d]==place["name"]]
+            if devices:
+                place["color"]=[211,48,53,230]
+                place["radius"]=110
+                place["state"]="⚠ SIMULATED FAULT · "+", ".join(devices)
+    elif matched and report["status"]=="healthy":
+        for place in places:
+            if any(mapping[d]==place["name"] for d in matched):
+                place["color"]=[15,139,99,220]
+                place["state"]="Healthy in latest simulated test"
     st.pydeck_chart(pdk.Deck(
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         initial_view_state=pdk.ViewState(latitude=20.1472,longitude=85.6735,zoom=15.25,pitch=0),
@@ -314,7 +341,10 @@ elif page=="Campus map":
     st.subheader("Incident location & connectivity")
     if report:
         if report["status"]=="diagnosed":
-            st.error(f"⚠ Simulated fault detected at {', '.join(report['affected_devices'])}. Physical campus position is not registered; no red pin is placed arbitrarily.")
+            if matched:
+                st.error("⚠ Simulated fault markers shown in red at manually assigned demonstration locations.")
+            else:
+                st.error(f"⚠ Simulated fault detected at {', '.join(report['affected_devices'])}. Physical campus position is not registered; no red pin is placed arbitrarily.")
         elif report["status"]=="healthy":
             st.success("The latest evaluated telemetry snapshot reported no detected fault. Other campus locations have not been tested.")
         else:
