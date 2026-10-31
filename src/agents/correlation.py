@@ -33,4 +33,7 @@ def correlate(t,findings,warnings,arbitration=False):
  if candidate and confidence<.2:notes.append("Insufficient convergent support");candidate=None;confidence=0.
  alternatives=[x for x in PRIORITY if x!=candidate and x in hypotheses]
  if candidate=="link_congestion":alternatives.append("upstream_link_congestion")
- return {"cause":candidate,"confidence":confidence,"evidence":diagnostic if candidate else evidence,"alternatives":list(dict.fromkeys(alternatives)),"conflicts":conflicts,"resolution_notes":notes,"inconclusive":not bool(candidate),"warnings":warnings}
+ healthy_keys={"link_utilization_pct","latency_ms","packet_loss_pct","cpu_pct","memory_pct","crc_errors","rssi_dbm","snr_db","dhcp_timeout_pct","dns_latency_ms","gateway_ping_ms"}
+ complete=healthy_keys.issubset(t) and all(f.status=="HEALTHY" for f in findings) and len(findings)==3 and not warnings and not conflicts and not candidate
+ if complete:notes.append("No anomalies detected across complete required telemetry snapshot")
+ return {"healthy":complete,"cause":candidate,"confidence":confidence,"evidence":diagnostic if candidate else evidence,"alternatives":list(dict.fromkeys(alternatives)),"conflicts":conflicts,"resolution_notes":notes,"inconclusive":not bool(candidate),"warnings":warnings}
