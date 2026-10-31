@@ -1,5 +1,7 @@
 """Gemini reviews specialists without altering their validated evidence or findings."""
 import os
+import re
+import math
 from pydantic import BaseModel, ConfigDict, Field
 
 class SpecialistReview(BaseModel):
@@ -9,6 +11,29 @@ class SpecialistReview(BaseModel):
     evidence_metrics: list[str] = Field(default_factory=list, max_length=10)
     missing_measurements: list[str] = Field(default_factory=list, max_length=8)
     uncertainty: str = Field(max_length=800)
+
+def verified_metric_names(citations: list[str], telemetry: dict) -> list[str]:
+    """Accept exact metric keys or 'key: observed_number' with verified value."""
+    resolved = []
+    for citation in citations:
+        value = citation.strip()
+        if value in telemetry:
+            key = value
+        else:
+            match = re.fullmatch(
+                r"([a-zA-Z_][a-zA-Z_0-9]*)\\s*:\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))",
+                value,
+            )
+            if not match:
+                raise ValueError(f"unknown cited metric: {citation[:90]}")
+            key, observed = match.group(1), float(match.group(2))
+            if key not in telemetry:
+                raise ValueError(f"unknown cited metric: {key}")
+            if not math.isclose(observed, telemetry[key], rel_tol=1e-6, abs_tol=1e-3):
+                raise ValueError(f"incorrect cited value for {key}")
+        if key not in resolved:
+            resolved.append(key)
+    return resolved
 
 def review_specialist(agent_id: str, telemetry: dict, finding: dict):
     if os.getenv("NETCOOP_GEMINI_AGENT_REVIEWS", "1") != "1":
@@ -28,7 +53,8 @@ def review_specialist(agent_id: str, telemetry: dict, finding: dict):
              "Cite only metric keys explicitly present in the supplied numeric telemetry. "
              "Set agent_id to the EXACT agent identifier provided in the request. "
              "If no anomalies are present, say that directly and cite normal metrics. "
-             "Use metric field names verbatim. Explain uncertainty concisely."),
+             "Return evidence_metrics as bare metric key strings without values or units. "
+             "Explain uncertainty concisely."),
             ("human", f"Agent: {agent_id}\nNumeric metrics: {numeric!r}\n"
              f"Validated deterministic finding: {finding!r}")
         ])
@@ -36,10 +62,8 @@ def review_specialist(agent_id: str, telemetry: dict, finding: dict):
         # The caller establishes identity; an LLM must not impersonate another agent.
         if review.agent_id and review.agent_id != agent_id:
             raise ValueError(f"unexpected agent_id {review.agent_id!r}; expected {agent_id!r}")
-        nonexistent = sorted(set(review.evidence_metrics) - set(numeric))
-        if nonexistent:
-            raise ValueError("unknown cited metrics: " + ", ".join(nonexistent))
-        return review.model_copy(update={"agent_id": agent_id}).model_dump(mode="json"), None
+        verified_metrics = verified_metric_names(review.evidence_metrics, numeric)
+        return review.model_copy(update={"agent_id": agent_id, "evidence_metrics": verified_metrics}).model_dump(mode="json"), None
     except Exception as exc:
         detail = str(exc).replace(os.getenv("GEMINI_API_KEY", "") or "__NO_SECRET__", "[REDACTED]")
         return None, f"Gemini specialist review unavailable ({type(exc).__name__}): {detail[:240]}"
