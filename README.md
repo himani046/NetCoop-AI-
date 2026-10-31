@@ -247,3 +247,22 @@ python -m pytest tests/test_health_and_reviews.py tests/test_scenarios.py tests/
 python -m pytest -v
 python -m streamlit run app.py
 ```
+
+## Operator console (Streamlit)
+
+The interface is now organized into four functional workspaces instead of displaying raw JSON on its primary pages:
+
+- **Overview** — latest operator diagnosis, key metrics, evidence, actions and saved incident history.
+- **Run diagnosis** — choose a built-in scenario or paste custom telemetry; run all five agents and review the readable results, including ACP collaboration and optional Gemini explanations.
+- **Campus map** — an interactive geographic basemap of IIT Bhubaneswar's Argul permanent campus, with reference point-of-interest labels. **It does not monitor actual campus network infrastructure.** The user can explicitly map a *simulated incident device* to a known campus location for the demonstration; the selected place then receives a red warning marker when the synthetic diagnosis is `diagnosed`. Locations are not automatically inferred from device names and the demo mapping must not be represented as real network topology or a live alert.
+- **Technical records** — raw final-report JSON, normalized telemetry, ACP envelopes, correlation data, Gemini review objects and saved incident JSON.
+
+Run `python -m streamlit run app.py`. A working internet connection is needed for remote basemap tiles; the diagnosis engine itself operates with synthetic/local telemetry. The map references OpenStreetMap-based campus POI coordinates:
+- IIT Bhubaneswar campus: https://mapcarta.com/W621537202
+- Main Building: https://mapcarta.com/W1302319387
+- Lalitgiri Lecture Hall: https://mapcarta.com/W1302319392
+- Pushpagiri Lecture Hall: https://mapcarta.com/W1302319393
+- Lab Complex: https://mapcarta.com/W1329357338
+- IIT SHSSM: https://mapcarta.com/W1302319395
+
+A true live campus network map requires authorized telemetry sources, audited device-to-location assignments, and validated link topology. The supplied hackathon problem statement explicitly permits synthetic telemetry and does not require production network access.
