@@ -64,9 +64,9 @@ The report's `confidence` is an evidence support score, not a calibrated probabi
 ### Optional LLM second opinion
 
 ```bash
-python -m pip install -e '.[test,llm-openai]'
-export OPENAI_API_KEY="your-key"
-export NETCOOP_LLM_MODEL="openai:gpt-4o-mini"
+python -m pip install -e '.[test,llm-gemini]'
+export GEMINI_API_KEY="your-key"
+export NETCOOP_LLM_MODEL="gemini-2.5-flash"
 ```
 
 An LLM is advisory: it can provide structured alternatives and explanations during arbitration/inconclusive cases, but cannot override deterministic findings. No API key is needed for the rule-based workflow.
@@ -137,7 +137,7 @@ python main.py --batch data/colab_batch.json --output reports/batch_results.json
 python -m pytest tests/test_batch.py -v
 ```
 
-The output contains summary counts, per-incident reports, validation warnings, and agent message histories. This is file-based batch processing; SQLite persistence is **not yet implemented**. The sample batch is an illustrative set of three cases rather than a collection exported from your Colab notebook.
+The output contains summary counts, per-incident reports, validation warnings, and agent message histories. Use `--db data/netcoop.db` to persist runs to SQLite. The sample batch is an illustrative set of three cases rather than a collection exported from your Colab notebook.
 
 ## SQLite persistence and incident history
 
@@ -159,9 +159,9 @@ The dashboard supports saving diagnoses and browsing stored reports with agent-m
 Install the provider integration and set an API key locally. The core five-agent system and all tests continue to work without a key.
 
 ```bash
-python -m pip install -e '.[test,llm-openai]'
-export OPENAI_API_KEY="YOUR_KEY_FROM_PROVIDER"
-export NETCOOP_LLM_MODEL="openai:gpt-5-mini"
+python -m pip install -e '.[test,llm-gemini]'
+export GEMINI_API_KEY="YOUR_KEY_FROM_PROVIDER"
+export NETCOOP_LLM_MODEL="gemini-2.5-flash"
 python main.py --scenario link_congestion
 streamlit run app.py
 ```
@@ -192,10 +192,43 @@ In Windows PowerShell, run from the cloned project folder:
 ```powershell
 Copy-Item .env.example .env
 notepad .env
-python -m pip install -e ".[test,llm-openai]"
+python -m pip install -e ".[test,llm-gemini]"
 python -m streamlit run app.py
 ```
 
-Replace `replace_with_your_openai_api_key` with your own key inside the local `.env`. The app loads it automatically through `python-dotenv`. Environment variables you set explicitly in the terminal take precedence. Do not use `git add -f .env`.
+Replace `replace_with_your_gemini_api_key` with your own key inside the local `.env`. The app loads it automatically through `python-dotenv`. Environment variables you set explicitly in the terminal take precedence. Do not use `git add -f .env`.
 
 To confirm Git excludes the key file, run `git check-ignore .env`. It should print `.env`.
+
+## Gemini-powered five-role workflow
+
+**Provider:** Google Gemini Developer API via `langchain-google-genai`. Obtain a key from https://aistudio.google.com/apikey .
+
+```powershell
+git pull origin main
+python -m pip install -e ".[test,llm-gemini]"
+Copy-Item .env.example .env
+notepad .env
+python -m pytest -v
+python -m streamlit run app.py
+```
+
+In your **local** `.env` file, configure:
+
+```dotenv
+GEMINI_API_KEY=your_private_google_ai_studio_key
+NETCOOP_LLM_MODEL=gemini-2.5-flash
+NETCOOP_GEMINI_AGENT_REVIEWS=1
+```
+
+The Performance, Infrastructure, and Connectivity agents run their established deterministic specialist analysis and optionally request **separate Gemini reviews**. Correlation requests a structured Gemini second opinion, and Reporting requests a Gemini operator summary. Gemini explanations never replace validated ACP findings, the deterministic root cause, evidence, confidence or canonical JSON. The UI presents the advisory reviews independently. Expect up to **five Gemini requests per incident**, which may consume quota and incur charges.
+
+To reduce calls, set `NETCOOP_GEMINI_AGENT_REVIEWS=0` to skip specialist and reporting reviews; Correlation will still use Gemini. To run completely offline, leave `NETCOOP_LLM_MODEL` empty. The included benchmark forcibly disables Gemini, so measurements remain reproducible. Google API failures do not prevent the deterministic diagnosis.
+
+**Before updating your existing local environment:** If you already created `.env` for OpenAI, edit that file manually, delete the OpenAI settings and add the Gemini settings above. `Copy-Item` must not overwrite a file containing secrets without checking it. Never commit `.env`; `git check-ignore .env` should confirm exclusion.
+
+```powershell
+python -m pytest tests/test_gemini_agents.py tests/test_ai_reasoning.py -v
+```
+
+The tests mock provider calls. They do not establish that a live Gemini API key has sufficient credits or requests per minute. Start the live demo with **one** incident before batch processing.
