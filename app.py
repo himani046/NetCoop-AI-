@@ -11,7 +11,7 @@ from src.graph.workflow import diagnose
 from src.utils.synthetic_data import scenarios
 from src.database.session import session_factory
 from src.database.repository import save_incident, list_incidents, get_incident
-from src.database.telemetry_inventory import parse_telemetry_batch, latest_device_records, observation_time
+from src.database.telemetry_inventory import parse_telemetry_batch, latest_device_records, observation_time, describe_observation
 
 st.set_page_config(page_title="NetCoop | Network operations", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -111,9 +111,11 @@ def nice_cause(cause):
     return CAUSE_LABELS.get(cause, (cause or "Insufficient evidence").replace("_", " ").title())
 
 
-def report_brief(report):
+def report_brief(report, normalized=None):
     st.markdown(status_html(report["status"]), unsafe_allow_html=True)
-    st.markdown("### " + nice_cause(report["suspected_root_cause"]))
+    label, explanation = describe_observation(report["status"], normalized, report) if normalized is not None else (None,None)
+    st.markdown("### " + (label.title() if report["status"]=="inconclusive" and label else nice_cause(report["suspected_root_cause"])))
+    if explanation and report["status"]=="inconclusive": st.caption(explanation)
     st.caption(" · ".join(report.get("affected_devices", [])) or "Affected device not specified")
     if report["status"] == "healthy":
         st.success("No anomaly detected in the evaluated telemetry snapshot.")
@@ -123,8 +125,8 @@ def report_brief(report):
         st.error("Fault detected in simulated network telemetry. Operator review recommended.")
 
 
-def report_detail(report):
-    report_brief(report)
+def report_detail(report, normalized=None):
+    report_brief(report, normalized)
     st.divider()
     a,b,c = st.columns(3)
     a.metric("Fault evidence support", f'{report["confidence"]:.1%}')
@@ -272,7 +274,7 @@ elif page=="Run diagnosis":
     with right:
         if state:
             st.markdown('<div class="nc-eyebrow">LATEST ANALYSIS</div>',unsafe_allow_html=True)
-            report_brief(state["final_report"])
+            report_brief(state["final_report"],state.get("normalized_telemetry"))
             st.metric("Fault evidence support",f'{state["final_report"]["confidence"]:.1%}')
             st.caption("Heuristic fault-evidence score · not calibrated correctness probability")
             for a in state["final_report"].get("recommended_actions",[]):
@@ -283,7 +285,7 @@ elif page=="Run diagnosis":
             st.markdown('<div class="nc-panel"><div class="nc-kicker">Ready to analyze</div><h3>Five specialized roles. One evidence-backed decision.</h3><p class="nc-sub">Performance · Infrastructure · Connectivity → Correlation → Reporting</p></div>',unsafe_allow_html=True)
     if state:
         st.divider()
-        report_detail(state["final_report"])
+        report_detail(state["final_report"],state.get("normalized_telemetry"))
         agent_activity(state)
         if state.get("gemini_report_review"):
             with st.expander("Operator explanation from Gemini"):
@@ -331,7 +333,7 @@ elif page=="Import telemetry":
                             pk=save_incident(session,raw_record,state_new)
                         r=state_new["final_report"]
                         results.append({"Device ID":device,"Timestamp (UTC)":timestamp.isoformat(),
-                                        "Status":r["status"].upper(),"Diagnosis":nice_cause(r["suspected_root_cause"]),
+                                        "Status":describe_observation(r["status"],state_new["normalized_telemetry"],r)[0],"Diagnosis":nice_cause(r["suspected_root_cause"]) if r["status"]!="inconclusive" else describe_observation(r["status"],state_new["normalized_telemetry"],r)[1],
                                         "Evidence support":f'{r["confidence"]:.1%}',"Record":pk,
                                         "Warnings":len(warnings)})
                         st.session_state["diagnostic_state"]=state_new
@@ -384,7 +386,7 @@ elif page=="Campus map":
             place["state"]="⚠ SIMULATED FAULT · "+", ".join(r["device_id"] for r in faults)
         elif unknowns:
             place["color"]=[194,132,37,230]
-            place["state"]="INCONCLUSIVE · "+", ".join(r["device_id"] for r in unknowns)
+            place["state"]="LIMITED / UNVERIFIED · "+", ".join(r["device_id"] for r in unknowns)
         elif attached:
             place["color"]=[15,139,99,220]
             place["state"]="HEALTHY in latest simulated reading · "+", ".join(r["device_id"] for r in attached)
@@ -412,8 +414,9 @@ elif page=="Campus map":
     try:
         if inventory:
             st.dataframe([{"Device ID":r["device_id"],"Observed (UTC)":r["timestamp"] or "Unknown",
-                           "Site":r["site"],"Status":r["status"].upper(),
-                           "Fault":nice_cause(r["root_cause"]),
+                           "Site":r["site"],"Status":r["display_status"],
+                           "Assessment":r["status_detail"],
+                           "Fault":nice_cause(r["root_cause"]) if r["status"]=="diagnosed" else (r["previous_fault"] or "—"),
                            "Evidence":f'{r["evidence_support"]:.1%}',
                            "Record":r["record_id"]} for r in inventory],
                          use_container_width=True,hide_index=True)
