@@ -172,3 +172,5 @@ tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
 .region-history-item{display:grid;grid-template-columns:1fr auto;gap:5px;padding:10px 0;border-top:1px solid #ebeeeb;font-size:11px}
 .region-history-item b{font-size:10px;color:#737e84;grid-column:1/-1}
 .region-history-item span{color:#303c42}.region-history-item a{color:#315fc0}
+
+.site-name{position:absolute;left:31px;top:4px;background:#fffffff0;border:1px solid #dae1db;border-radius:4px;padding:5px 8px;white-space:nowrap;font:700 11px "DM Sans",sans-serif;color:#29363a;box-shadow:0 1px 6px #0002;pointer-events:none}
