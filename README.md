@@ -171,3 +171,14 @@ Do not commit credentials. AI reviews are advisory Pydantic-validated structured
 With the model configured, a review runs after correlation for ordinary cases and after bounded arbitration for conflicting cases. Without configuration, diagnostics remain offline and deterministic. Mocked tests in `tests/test_ai_reasoning.py` exercise success, disagreement and failure without contacting a provider.
 
 **Caution:** The mock tests do not prove a live API model integration. Verify provider credentials, model availability, latency and billing before the demonstration.
+
+## Offline diagnostic benchmark (no API key)
+
+```bash
+python benchmark.py --per-class 20 --seed 42 --output reports/benchmark.json
+python -m pytest tests/test_benchmark.py -v
+```
+
+The script creates 120 seeded synthetic evaluations: 20 instances each of normal operation, link congestion, weak Wi-Fi, physical interface fault, DHCP fault and deliberately insufficient telemetry. It executes the existing five-agent LangGraph diagnosis without activating the optional LLM. It reports overall accuracy, macro F1, per-class precision/recall/F1, a confusion matrix, abstention rate, average and approximate p95 latency, and individual failure cases. The JSON report is reusable by demos or dashboards.
+
+**Interpretation:** Labels are assigned by the generator from known fault templates with small noise; this measures reproducibility and performance *on synthetic fixtures*, not verified performance on independently labeled real campus incidents. An inconclusive result on a known normal record is scored as normal only if the specialist agents raise no fault hypotheses; this is a benchmark scoring convention. Run results are not predetermined and should never be advertised before executing the benchmark.
