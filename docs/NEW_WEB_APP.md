@@ -77,3 +77,14 @@ Mappings are stored in `demo_campus_assignments`, an additional local SQLite tab
 Run `python -m pytest tests/test_api.py -v` and `cd frontend && npm install && npm run build`. The static Next.js build can deploy to a free Render Static Site, but the 3D view requires browser WebGL support. UI verification in a local browser is still necessary. For rendering performance, the 3D scene caps device pixel ratio and supports orbit/zoom. Reduced-motion user settings disable CSS transitions; full 3D animation reduction remains future enhancement.
 
 **Do not expose** the unauthenticated Phase 2 demo mapping endpoints or telemetry ingestion to sensitive real network information. Phase 2 illustrates possible operations visualization and does not claim a live campus feed.
+
+## Phase 3 — forensic timeline and saved multi-agent investigations
+
+Two pages are available in the new Next.js frontend:
+
+- `/playback`: a play/pause timeline of *actual stored* telemetry timestamps (UTC), with a scrubber, device condition counts, and one latest-known diagnosis per device as of each selected timepoint. Device cards open the corresponding investigation.
+- `/agents`: a selectable incident, five-stage workflow navigator, actual saved ACP messages, specialist evidence (when stored), final root cause, support score, and recommendations.
+
+API: `GET /api/playback/events?limit=500` (at most 500 dated historical records from a scan of the 5,000 most recently saved incidents, sorted by observation timestamp; undated rows are excluded and counted) and `GET /api/incidents/{record_id}/investigation`. This is a **historical visualization**, not a live timing trace: because specialists run in parallel, the five steps represent the logical workflow, not measured execution ordering or durations. Only persisted messages and findings are displayed; no Gemini responses or inter-agent conclusions are invented.
+
+For local verification run `python -m pytest tests/test_api.py -v` in the project root and `npm run build` in `frontend/`. On Render static hosting there is no paid map dependency; API and persistent data limitations from Phases 1–2 still apply. Existing Streamlit code was not changed.
