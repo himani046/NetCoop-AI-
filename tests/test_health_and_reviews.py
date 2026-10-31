@@ -53,3 +53,19 @@ def test_specialist_review_accepts_missing_identity_and_validates_metric_names(m
     assert warning is None
     assert review["agent_id"] == "performance_agent"
     assert review["evidence_metrics"] == ["latency_ms"]
+
+def test_gemini_metric_citations_with_values_are_normalized():
+    from src.agents.gemini_review import verified_metric_names
+    observed = {"cpu_pct": 23, "latency_ms": 24.0, "packet_loss_pct": 0}
+    assert verified_metric_names(
+        ["cpu_pct: 23.0", "latency_ms: 24.0", "packet_loss_pct: 0.0"],
+        observed,
+    ) == ["cpu_pct", "latency_ms", "packet_loss_pct"]
+
+def test_gemini_metric_citation_rejects_invented_values():
+    import pytest
+    from src.agents.gemini_review import verified_metric_names
+    with pytest.raises(ValueError, match="incorrect cited value"):
+        verified_metric_names(["cpu_pct: 99.0"], {"cpu_pct": 23})
+    with pytest.raises(ValueError, match="unknown cited metric"):
+        verified_metric_names(["nonexistent_metric: 10"], {"cpu_pct": 23})
