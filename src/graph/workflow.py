@@ -35,13 +35,14 @@ def decision_node(state:DiagnosticState,arbitration:bool=False)->dict:
   d["cause"]=None
   d["confidence"]=0.0
   d["inconclusive"]=True
+  d["healthy"]=False
   d["resolution_notes"].append("ACP validation incomplete: diagnosis withheld pending all specialist findings")
  if (arbitration or not d["conflicts"]) and os.getenv("NETCOOP_LLM_MODEL"):
   opinion,warning=structured_second_opinion(state["normalized_telemetry"],[f.model_dump(mode="json") for f in fs],d["cause"])
   if opinion is not None:
    d["ai_review"] = opinion.model_dump(mode="json")
    d["resolution_notes"].append("Advisory LLM second opinion: "+opinion.explanation)
-   d["alternatives"]=list(dict.fromkeys(d["alternatives"]+opinion.alternative_causes))
+   # Gemini alternatives stay advisory and never enter the validated final report.
    if opinion.suggested_cause!=d["cause"]:d["resolution_notes"].append("LLM differs from deterministic evidence; no automatic override")
   elif warning:d["resolution_notes"].append(warning)
  message={"message_type":"arbitration" if arbitration else "correlation","sender":"correlation_agent","recipient":"reporting_agent","correlation_id":state["incident_id"],"decision":{"cause":d["cause"],"confidence":d["confidence"],"conflicts":d["conflicts"]}}
