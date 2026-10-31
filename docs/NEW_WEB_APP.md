@@ -88,3 +88,13 @@ Two pages are available in the new Next.js frontend:
 API: `GET /api/playback/events?limit=500` (at most 500 dated historical records from a scan of the 5,000 most recently saved incidents, sorted by observation timestamp; undated rows are excluded and counted) and `GET /api/incidents/{record_id}/investigation`. This is a **historical visualization**, not a live timing trace: because specialists run in parallel, the five steps represent the logical workflow, not measured execution ordering or durations. Only persisted messages and findings are displayed; no Gemini responses or inter-agent conclusions are invented.
 
 For local verification run `python -m pytest tests/test_api.py -v` in the project root and `npm run build` in `frontend/`. On Render static hosting there is no paid map dependency; API and persistent data limitations from Phases 1–2 still apply. Existing Streamlit code was not changed.
+
+## Phase 4 — spatial playback inside the interactive 3D campus
+
+Open `/campus` and enable **Historical mode**. Play, pause, or scrub the saved telemetry timepoints. The same Three.js 3D regions now recompute their condition for each historical frame, using the last available diagnosed observation per device at or before that time. Red denotes one or more diagnosed faults, ochre denotes an inconclusive assessment with no diagnosed fault, and forest green denotes all mapped devices healthy. Unmapped or not-yet-observed regions remain stone-neutral. Device details in the region inspector follow the same frame.
+
+`GET /api/map/history?limit=500` responds with timestamped `frames`, each containing the region states and the per-device observation that produced them. The endpoint reuses the existing bounded `playback_events` history and the saved manual demo assignments; no extra database tables or changes to `app.py` were required.
+
+**Historical mapping caveat:** Only current manual assignments are stored. They are applied retroactively during replay; the app does not store historical device moves, real building footprints, or real network topology. A sequence can also be incomplete when records exceed the 500-event window or 5,000-record scan cap. Importantly, there is **no automatic region assignment** based solely on device IDs.
+
+Tests: `python -m pytest tests/test_api.py -v` now covers out-of-order uploads, time-based region transitions, unmapped devices, and endpoint input bounds. From `frontend/`, run `npm install && npm run build` and verify WebGL interaction in a browser. Free Render hosting limitations and API authentication warnings from previous phases remain in force.
