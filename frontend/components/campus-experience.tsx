@@ -1,0 +1,30 @@
+"use client";
+import {useEffect,useMemo,useState} from "react";
+import dynamic from "next/dynamic";
+import {Device,getJSON,postJSON,pretty} from "../lib/api";
+import type {Region} from "./campus-scene";
+const Scene=dynamic(()=>import("./campus-scene").then(m=>m.CampusScene),{ssr:false,loading:()=> <div className="campus-canvas loading-map">Preparing campus scene…</div>});
+type Snapshot={live:boolean;mode:string;regions:Region[];device_assignments:{device_id:string;region_id:string}[]};
+export function CampusExperience(){
+ const [data,setData]=useState<Snapshot|null>(null),[devices,setDevices]=useState<Device[]>([]),[selected,setSelected]=useState<string|null>(null);
+ const [device,setDevice]=useState(""),[region,setRegion]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ async function refresh(){const [a,b]=await Promise.all([getJSON<Snapshot>("/api/map/regions"),getJSON<Device[]>("/api/devices/latest")]);setData(a);setDevices(b);setSelected(s=>s||a.regions[0]?.id||null)}
+ useEffect(()=>{refresh().catch(e=>setError(String(e)))},[]);
+ const active=useMemo(()=>data?.regions.find(r=>r.id===selected),[data,selected]);
+ async function assign(){if(!device){setError("Choose a device");return}setBusy(true);setError("");try{await postJSON("/api/map/assign",{device_id:device,region_id:region||null});await refresh()}catch(e){setError(String(e))}finally{setBusy(false)}}
+ return <><header className="page-head"><div className="eyebrow">01 / CAMPUS OPERATIONS</div><h1 className="heading">A campus in context.</h1><p className="sub">An interactive 3D operations model with fault states inferred from the latest saved readings of manually assigned devices.</p></header>
+ <div className="cartouche"><span>SIMULATED DATA</span><span>LOCATIONS ASSIGNED MANUALLY</span><span>NO LIVE CAMPUS MONITORING</span></div>
+ <div className="map-layout"><section className="map-frame">{data?<Scene regions={data.regions} selected={selected} onSelect={setSelected}/>:<div className="loading-map">Loading campus reference…</div>}<div className="map-legend"><span><i className="legend-green"/>Normal</span><span><i className="legend-red"/>Fault</span><span><i className="legend-yellow"/>Unverified</span><span><i className="legend-gray"/>Unassigned</span></div></section>
+ <aside className="map-inspector"><span className="smallmono">SELECTED REGION</span><h2>{active?.name||"Choose a region"}</h2><p className="sub">Reference point of interest</p><div className={"region-condition "+(active?.status||"unmonitored")}>{active?.status==="fault"?"FAULT DETECTED":active?.status==="healthy"?"OBSERVED NORMAL":active?.status==="limited"?"REVIEW REQUIRED":"NO ASSIGNED DEVICES"}</div>
+ <div className="inspector-count">{active?.devices.length||0}<span>assigned device(s)</span></div>
+ {active?.devices.map(d=><div className="region-device" key={d.device_id}><b>{d.device_id}</b><small>{d.status==="diagnosed"?pretty(d.root_cause):d.status.toUpperCase()}</small></div>)}
+ <div className="assign-box"><div className="smallmono">DEMO DEVICE PLACEMENT</div><p className="sub">Assignment is not a claim of a real equipment installation.</p>
+ <select aria-label="Device to assign" value={device} onChange={e=>setDevice(e.target.value)}><option value="">Select device</option>{devices.map(d=><option key={d.device_id} value={d.device_id}>{d.device_id}</option>)}</select>
+ <select aria-label="Region to assign" value={region} onChange={e=>setRegion(e.target.value)}><option value="">Remove assignment</option>{data?.regions.map(r=><option value={r.id} key={r.id}>{r.name}</option>)}</select><button disabled={busy||!device} onClick={assign}>Apply assignment</button></div>
+ </aside></div>
+ {error&&<p className="error">{error}</p>}
+ <div className="section-header"><h2>Region conditions</h2><span className="smallmono">LATEST OBSERVATIONS / UTC</span></div>
+ <div className="region-list">{data?.regions.map(r=><button className={"region-row "+r.status} key={r.id} onClick={()=>setSelected(r.id)}><span>{r.name}</span><span>{r.devices.length} DEVICES</span><strong>{r.status.toUpperCase()}</strong></button>)}</div>
+ <p className="map-disclaimer">This is an illustrative spatial interface using geographic reference points. Building shapes are abstract—not surveyed GIS geometry. Color reflects only manually associated devices and their latest saved synthetic diagnoses, never an assertion about live area-wide connectivity.</p>
+ </>;
+}
