@@ -61,3 +61,19 @@ Imports accept `{"records":[{...},{...}]}`. The API prevalidates all device IDs 
 **Security:** Phase 1 has no user authentication or abuse protection. Never expose private telemetry or real campus network data on a public API, and avoid enabling billable Gemini calls for unauthenticated public requests. Deploy with `NETCOOP_LLM_MODEL` empty by default, or add authentication, rate limits and request budgets first.
 
 CORS limits browser origins but **is not authentication**. No actual IIT Bhubaneswar network access or live monitoring is implied.
+
+## Phase 2 — interactive campus scene
+
+The web UI now uses an editorial architectural design language: limestone backgrounds, charcoal sidebar, terracotta actions, ochre warnings and forest-green healthy states (no neon/cyan AI-dashboard styling).
+
+The `/campus` view uses **React Three Fiber, Three.js and Drei** to render a fully interactive, orbitable/zoomable illustrative campus scene. Region labels are derived from named geographic reference locations, but **building geometry and spacing are abstract illustrations, not surveyed IIT Bhubaneswar building footprints or actual network topology**. Each region starts neutral. A user can select a device from the database and explicitly assign it to one region for a simulated demonstration. Region state uses the most recent observation per mapped device, with precedence fault > inconclusive > healthy, and displays a red animated alert for faults. The region inspector lists the devices and their diagnoses.
+
+New API:
+- `GET /api/map/regions` — region metadata, assigned devices and computed state
+- `POST /api/map/assign` — JSON `{"device_id":"SW1","region_id":"labs"}`, or `"region_id":null` to remove an assignment
+
+Mappings are stored in `demo_campus_assignments`, an additional local SQLite table. Existing Streamlit UI, `app.py`, agent logic and original tables are unchanged. Free Render service restarts **will erase** local SQLite mapping and incident data.
+
+Run `python -m pytest tests/test_api.py -v` and `cd frontend && npm install && npm run build`. The static Next.js build can deploy to a free Render Static Site, but the 3D view requires browser WebGL support. UI verification in a local browser is still necessary. For rendering performance, the 3D scene caps device pixel ratio and supports orbit/zoom. Reduced-motion user settings disable CSS transitions; full 3D animation reduction remains future enhancement.
+
+**Do not expose** the unauthenticated Phase 2 demo mapping endpoints or telemetry ingestion to sensitive real network information. Phase 2 illustrates possible operations visualization and does not claim a live campus feed.
