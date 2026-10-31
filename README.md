@@ -232,3 +232,18 @@ python -m pytest tests/test_gemini_agents.py tests/test_ai_reasoning.py -v
 ```
 
 The tests mock provider calls. They do not establish that a live Gemini API key has sufficient credits or requests per minute. Start the live demo with **one** incident before batch processing.
+
+## Healthy outcomes and Gemini review validation
+
+The final report has three explicit statuses: `diagnosed` for evidence-backed faults, `healthy` for complete normal snapshots where all three specialists report healthy, and `inconclusive` for insufficient or unreliable data. Healthy results do **not** imply a network-wide uptime guarantee; they describe only the observed snapshot. The `confidence` field remains the *fault-evidence support score*, so a healthy snapshot has a score of 0.
+
+Gemini's alternative hypotheses stay in a separate `decision.ai_review` and cannot enter the canonical incident JSON without deterministic corroboration. Specialist reviews validate metric references and assign their identity from the calling agent; model-supplied conflicting identities and invented metrics are rejected. Validation warnings now include a short reason, without printing a configured API key.
+
+Run targeted regression tests:
+
+```powershell
+git pull origin main
+python -m pytest tests/test_health_and_reviews.py tests/test_scenarios.py tests/test_gemini_agents.py -v
+python -m pytest -v
+python -m streamlit run app.py
+```
