@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-10-31T16:21:56.896760Z",
+  "device_id": "SW_CAMPUS_8",
+  "cpu_pct": 99.9,
+  "link_utilization_pct": 100,
+  "packet_loss_pct": 16.4,
+  "latency_ms": 635.46,
+  "queue_drops": 10730
+}
