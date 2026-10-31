@@ -244,7 +244,9 @@ elif page=="Run diagnosis":
     left,right=st.columns([1,1.15],gap="large")
     with left:
         scenario=st.selectbox("Test scenario",list(SCENARIOS),format_func=lambda k:SCENARIO_LABELS.get(k,k))
-        raw=st.text_area("Telemetry input (JSON)",value=json.dumps(SCENARIOS[scenario],indent=2),height=300,key="payload_"+scenario)
+        with st.expander("Advanced · Edit telemetry input"):
+            raw=st.text_area("Telemetry JSON",value=json.dumps(SCENARIOS[scenario],indent=2),height=260,key="payload_"+scenario)
+        st.caption("The selected scenario supplies the telemetry automatically. Use Advanced only for custom input.")
         save=st.checkbox("Save incident to SQLite",value=True)
         if st.button("Run five-agent diagnosis",type="primary",use_container_width=True):
             try:
@@ -294,7 +296,7 @@ elif page=="Run diagnosis":
 elif page=="Campus map":
     heading("CAMPUS / GEOGRAPHY","IIT Bhubaneswar campus map",
             "OpenStreetMap basemap · Argul permanent campus · Verified points of interest")
-    st.info("Reference geography only — this app has no live campus telemetry feed or verified device-to-building mapping. A red incident marker is shown only for a device with a supplied, validated location.")
+    st.info("Reference geography only — this app has no live campus telemetry feed or verified device-to-building mapping. Red alerts require a manual demo assignment of an incident device to a mapped place.")
     # Explicit mapping, rather than inferring physical position from device names.
     # An operator may explicitly assign a test device to a known POI for demonstration.
     mapping = st.session_state.setdefault("demo_device_locations", {})
@@ -355,7 +357,9 @@ elif page=="Campus map":
             st.warning("Latest evidence insufficient to determine network health.")
         st.markdown("**Devices from latest diagnosis**")
         for device in report["affected_devices"]:
-            st.markdown(f"• `{device}` — location not geocoded; **{report['status']}** in latest test")
+            place_name=mapping.get(device)
+            location_note=f"demo-assigned to {place_name}" if place_name else "location not mapped"
+            st.markdown(f"• `{device}` — {location_note}; **{report['status']}** in latest test")
     st.caption("Campus buildings do not imply verified network links. Register surveyed coordinates and authorized live telemetry to enable accurate location-level alerts.")
 
 elif page=="Technical records":
