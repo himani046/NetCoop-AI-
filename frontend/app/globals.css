@@ -174,3 +174,5 @@ tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
 .region-history-item span{color:#303c42}.region-history-item a{color:#315fc0}
 
 .site-name{position:absolute;left:31px;top:4px;background:#fffffff0;border:1px solid #dae1db;border-radius:4px;padding:5px 8px;white-space:nowrap;font:700 11px "DM Sans",sans-serif;color:#29363a;box-shadow:0 1px 6px #0002;pointer-events:none}
+
+.topology-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:10px;margin-top:16px}.topology-edge{display:flex;align-items:center;gap:9px;background:#f7f9f7;border:1px solid #e4e9e6;border-radius:8px;padding:11px;flex-wrap:wrap}.topology-node{background:#fff;border:1px solid #dce2df;border-radius:6px;padding:8px 11px;font:600 11px 'IBM Plex Mono',monospace;color:#3c4b53}.topology-arrow{color:#315fc0;font-size:18px}.topology-edge .status{font-size:9px}
