@@ -32,13 +32,14 @@ def decision_node(state:DiagnosticState,arbitration:bool=False)->dict:
   d["confidence"]=0.0
   d["inconclusive"]=True
   d["resolution_notes"].append("ACP validation incomplete: diagnosis withheld pending all specialist findings")
- if arbitration or d["inconclusive"]:
-  opinion,warning=structured_second_opinion(state["normalized_telemetry"],[f.model_dump(mode="json") for f in fs])
+ if (arbitration or not d["conflicts"]) and os.getenv("NETCOOP_LLM_MODEL"):
+  opinion,warning=structured_second_opinion(state["normalized_telemetry"],[f.model_dump(mode="json") for f in fs],d["cause"])
   if opinion is not None:
+   d["ai_review"] = opinion.model_dump(mode="json")
    d["resolution_notes"].append("Advisory LLM second opinion: "+opinion.explanation)
    d["alternatives"]=list(dict.fromkeys(d["alternatives"]+opinion.alternative_causes))
    if opinion.suggested_cause!=d["cause"]:d["resolution_notes"].append("LLM differs from deterministic evidence; no automatic override")
-  elif warning and "disabled" not in warning:d["resolution_notes"].append(warning)
+  elif warning:d["resolution_notes"].append(warning)
  message={"message_type":"arbitration" if arbitration else "correlation","sender":"correlation_agent","recipient":"reporting_agent","correlation_id":state["incident_id"],"decision":{"cause":d["cause"],"confidence":d["confidence"],"conflicts":d["conflicts"]}}
  return {"validated_messages":[m.model_dump(mode="json") for m in accepted],"decision":d,"conflicts_detected":bool(d["conflicts"]) and not arbitration,"resolution_notes":d["resolution_notes"],"retry_budget":max(0,state.get("retry_budget",0)-1) if arbitration else state.get("retry_budget",0),"messages":[message]}
 def route(state:DiagnosticState)->str:
@@ -55,6 +56,8 @@ def reporting_node(state:DiagnosticState)->dict:
    output["calibrated_correctness_probability"]=p
    if p is None:output["limitations"].append("Insufficient independent calibration samples in score bin")
   except (ValueError,KeyError,OSError,TypeError) as exc:output["limitations"].append(f"Invalid calibration model: {exc}")
+ if state["decision"].get("ai_review"):
+  output["ai_review"]=state["decision"]["ai_review"]
  return {"final_report":output,"markdown_report":markdown_report(r),"messages":[{"message_type":"final_report","sender":"reporting_agent","recipient":"operator","correlation_id":state["incident_id"],"status":r.status}]}
 def build_graph():
  g=StateGraph(DiagnosticState)
