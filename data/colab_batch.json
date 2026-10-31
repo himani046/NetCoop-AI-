@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp": "2026-10-31T16:21:56Z",
+    "device_id": "SW_CAMPUS_8",
+    "metrics": {
+      "cpu_utilization_pct": 99.9,
+      "link_utilization_pct": 100,
+      "packet_loss_pct": 16.4,
+      "latency_ms": 635.46,
+      "queue_drops": 10730,
+      "interface_errors": 160
+    },
+    "status": "Critical"
+  },
+  {
+    "device_id": "HOSTEL_AP_02",
+    "metrics": {
+      "rssi_dbm": -86,
+      "snr_db": 8,
+      "retransmissions_pct": 42,
+      "latency_ms": 100
+    },
+    "timestamp": "2026-10-31T16:22:00Z"
+  },
+  {
+    "device_id": "DEPT_SW_03",
+    "metrics": {
+      "link_utilization_pct": 14,
+      "crc_errors": 12450,
+      "latency_ms": 190
+    },
+    "timestamp": "2026-10-31T16:23:00Z"
+  }
+]
