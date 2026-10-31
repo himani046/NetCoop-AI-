@@ -39,6 +39,12 @@ if "diagnostic_state" in st.session_state:
   with st.expander(f'{i}. {msg["sender"]} → {msg["recipient"]}'):st.json(msg)
  st.subheader("Evidence and arbitration")
  st.json({"conflicts":state["decision"]["conflicts"],"resolution_notes":state["resolution_notes"]})
+ if state["decision"].get("ai_review"):
+  st.subheader("AI Advisory Review")
+  st.caption("Optional LLM second opinion: it cannot override evidence-based root cause or confidence.")
+  st.json(state["decision"]["ai_review"])
+ elif any("AI unavailable" in note for note in state.get("resolution_notes",[])):
+  st.info("AI review unavailable; deterministic diagnosis completed normally.")
  st.subheader("Final report");st.json(r)
  st.download_button("Download incident JSON",json.dumps(r,indent=2),"incident-report.json","application/json")
  st.download_button("Download post-mortem Markdown",state["markdown_report"],"incident-postmortem.md","text/markdown")
