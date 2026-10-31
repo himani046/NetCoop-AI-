@@ -182,3 +182,20 @@ python -m pytest tests/test_benchmark.py -v
 The script creates 120 seeded synthetic evaluations: 20 instances each of normal operation, link congestion, weak Wi-Fi, physical interface fault, DHCP fault and deliberately insufficient telemetry. It executes the existing five-agent LangGraph diagnosis without activating the optional LLM. It reports overall accuracy, macro F1, per-class precision/recall/F1, a confusion matrix, abstention rate, average and approximate p95 latency, and individual failure cases. The JSON report is reusable by demos or dashboards.
 
 **Interpretation:** Labels are assigned by the generator from known fault templates with small noise; this measures reproducibility and performance *on synthetic fixtures*, not verified performance on independently labeled real campus incidents. An inconclusive result on a known normal record is scored as normal only if the specialist agents raise no fault hypotheses; this is a benchmark scoring convention. Run results are not predetermined and should never be advertised before executing the benchmark.
+
+## Private API key setup via .env
+
+The repo contains a safe `.env.example` template. Your real `.env` is already Git-ignored; **never push credentials**.
+
+In Windows PowerShell, run from the cloned project folder:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+python -m pip install -e ".[test,llm-openai]"
+python -m streamlit run app.py
+```
+
+Replace `replace_with_your_openai_api_key` with your own key inside the local `.env`. The app loads it automatically through `python-dotenv`. Environment variables you set explicitly in the terminal take precedence. Do not use `git add -f .env`.
+
+To confirm Git excludes the key file, run `git check-ignore .env`. It should print `.env`.
