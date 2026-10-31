@@ -1,0 +1,1 @@
+"""Persistent NetCoop incident storage."""
