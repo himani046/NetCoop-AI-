@@ -1,10 +1,11 @@
-# NetCoop AI — Five-Agent LangGraph Network Diagnosis
+# NetCoop AI — Multi-Agent Network Fault Diagnosis
 
-The full runnable source archive was generated and delivered as **netcoop-ai.zip** in the ChatGPT conversation. Extract that archive to obtain the complete modular project.
+Runnable five-role network diagnosis system built with LangGraph, LangChain and Pydantic v2. Three specialist agents run in parallel; the correlation agent resolves cross-agent evidence; the reporting agent emits structured JSON and a Markdown incident report.
 
-## Local setup
+## Quick start (Python 3.11+)
+
 ```bash
-python3.11 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[test]'
 python -m pytest -q
@@ -12,10 +13,77 @@ python main.py --scenario link_congestion
 streamlit run app.py
 ```
 
+On Windows activate with `.venv\Scripts\activate`.
+
+## Six benchmark scenarios
+
+`normal_operation`, `link_congestion`, `weak_wifi_signal`, `interface_fault`, `dhcp_dns_failure`, `malformed_and_missing_data`.
+
+```bash
+python main.py --scenario interface_fault --output incident.json
+python main.py --file colab_sample.json
+```
+
+## Colab dataset
+
+Run the hackathon's synthetic telemetry generator, export an individual observation as a JSON object and pass it to `--file`. For example, if Colab exposes a pandas DataFrame named `df`:
+
+```python
+import json
+from google.colab import files
+row = df.iloc[0].where(df.iloc[0].notna(), None).to_dict()
+with open("colab_sample.json", "w") as f:
+    json.dump(row, f, default=str, indent=2)
+files.download("colab_sample.json")
+```
+
+Check the actual notebook column names before use; the notebook contents were not accessible for schema verification. The normalizer accepts aliases for latency, utilization, queue drops, CPU, Wi-Fi, DNS and DHCP data. It converts units and reports missing fields.
+
 ## Architecture
-Five functional roles: Performance, Infrastructure, Connectivity, Fault Correlation/Arbitration, Reporting. LangGraph executes three diagnostic agents in parallel, joins findings at a barrier, optionally arbitrates, and returns JSON plus an incident Markdown report.
 
-## Synthetic telemetry
-Run the organizer's Colab generator, export a single row to JSON, then invoke `python main.py --file telemetry.json`. Field aliases and units are normalized with warnings; diagnostic uncertainty is reported explicitly.
+```text
+Telemetry JSON
+    |
+Normalize + validate
+    |
+    +--> Performance Agent ---+
+    +--> Infrastructure Agent +--> Correlation Agent --> [Arbitration when necessary] --> Reporting Agent
+    +--> Connectivity Agent --+
+```
 
-> This is the initial repository setup document. The modular code is supplied separately in the downloadable source archive; it has **not** been synchronized into individual GitHub files yet.
+The protocol `src/protocol/models.py` defines immutable ACP v1.2.0 Pydantic messages, agent findings and report schemas. LangGraph controls the barrier join and optional bounded arbitration. No agent should claim an exact root cause from insufficient telemetry.
+
+### Topology
+
+Supply `topology: {"nodes":[{"id":"AP1","parent_id":"SW1","role":"ap","site":"Hostel"},...]}` plus `affected_device_ids` to evaluate a shared ancestor and blast radius. Unknown nodes and cycles produce warnings.
+
+### Confidence
+
+The report's `confidence` is an evidence support score, not a calibrated probability. For empirical calibration, fit `src/utils/calibration.fit_bins` using **independently labeled incidents**, serialize the resulting model as JSON, and set `NETCOOP_CALIBRATION_FILE`. The system abstains from returning a calibrated probability when a bin contains fewer than 20 labels. Synthetic fixture labels do not establish real-world calibration.
+
+### Optional LLM second opinion
+
+```bash
+python -m pip install -e '.[test,llm-openai]'
+export OPENAI_API_KEY="your-key"
+export NETCOOP_LLM_MODEL="openai:gpt-4o-mini"
+```
+
+An LLM is advisory: it can provide structured alternatives and explanations during arbitration/inconclusive cases, but cannot override deterministic findings. No API key is needed for the rule-based workflow.
+
+## Acceptance and limitations
+
+- Five functional diagnostic roles; three concurrent specialist agents.
+- Cross-agent structured evidence, confidence scoring and conflict resolution.
+- Malformed input handling and reproducible fixtures.
+- Streamlit UI with downloadable JSON and post-mortem.
+- Automatic tests using `pytest` and GitHub Actions.
+
+**Not yet production-validated:** Real telemetry counter rates, empirical confidence calibration, LLM provider behavior, and security of ingestion pipelines require more work. No production campus configuration is modified. This implementation is a hackathon prototype.
+
+## Demo (3–5 minutes)
+
+1. Run link congestion to show utilization, queue drops and latency agreement.
+2. Run interface fault to show CRC evidence winning over latency-only suspicion.
+3. Run malformed input to expose normalization warnings.
+4. Show agent messages, arbitration path and final JSON in Streamlit.
