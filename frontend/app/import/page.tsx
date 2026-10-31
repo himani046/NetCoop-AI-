@@ -1,31 +1,18 @@
-"use client";
-import {useState} from "react";
-import {postJSON,pretty} from "../../lib/api";
-type Row={index:number;device_id:string;record_id?:number;report?:{status:string;suspected_root_cause:string};error?:string}
-export default function ImportTelemetry(){
- const [text,setText]=useState("");
- const [rows,setRows]=useState<Row[]>([]);
- const [error,setError]=useState("");
- const [busy,setBusy]=useState(false);
- async function run(){
-  setError("");setBusy(true);
-  try{
-   const payload=JSON.parse(text);
-   const records=Array.isArray(payload)?payload:Array.isArray(payload.records)?payload.records:[payload];
-   const result=await postJSON<{results:Row[]}>("/api/telemetry/import",{records});
-   setRows(result.results);
-  }catch(e){setError(String(e))}finally{setBusy(false)}
- }
- async function fromFile(file?:File){if(file)setText(await file.text())}
- return <><div className="eyebrow">DATA / INGESTION</div><h1 className="heading">Import telemetry.</h1>
- <p className="sub">Upload or paste a JSON object, JSON array, or an object with a records array. Every observation is retained by device ID and timestamp.</p>
- <section className="panel"><h2>Telemetry input</h2>
- <input type="file" accept=".json,application/json" onChange={e=>fromFile(e.target.files?.[0])}/>
- <p><textarea aria-label="Telemetry JSON" placeholder='[{"device_id":"SW-01","timestamp":"2026-10-31T10:00:00Z","latency_ms":20}]' value={text} onChange={e=>setText(e.target.value)}/></p>
- <button onClick={run} disabled={busy||!text.trim()}>{busy?"Diagnosing…":"Import and diagnose →"}</button>
- {error&&<p className="error">{error}</p>}
- </section>
- {rows.length>0&&<section className="panel table-wrap"><h2>Import results</h2><table><thead><tr><th>Record</th><th>Device</th><th>Status</th><th>Diagnosis</th></tr></thead><tbody>{rows.map(r=><tr key={r.index}><td>{r.record_id??r.index}</td><td>{r.device_id}</td><td>{r.report?.status??"FAILED"}</td><td>{r.error??pretty(r.report?.suspected_root_cause??"")}</td></tr>)}</tbody></table></section>}
- <p className="sub">Import defaults to the server's configured diagnostic mode. On a free public deployment, disable Gemini in the backend until authentication and quota limits are implemented.</p>
- </>;
+"use client";import {useMemo,useRef,useState} from "react";import Link from "next/link";import {UploadCloud,FileJson,AlertTriangle,CheckCircle2} from "lucide-react";import {postJSON,pretty} from "../../lib/api";
+type Entry={index:number;device_id:string;record_id?:number;report?:{status:string;suspected_root_cause:string};error?:string};type Upload={count:number;results:Entry[]};
+function readRecords(text:string):Record<string,unknown>[]{
+ const parsed:unknown=JSON.parse(text);const raw=Array.isArray(parsed)?parsed:typeof parsed==="object"&&parsed!==null&&("records" in parsed||"telemetry" in parsed)?((parsed as {records?:unknown;telemetry?:unknown}).records??(parsed as {telemetry?:unknown}).telemetry):[parsed];
+ if(!Array.isArray(raw)||!raw.length||raw.length>500)throw Error("Expected 1–500 JSON telemetry objects.");
+ raw.forEach((v,i)=>{if(typeof v!=="object"||v===null||Array.isArray(v))throw Error("Record "+(i+1)+" must be a JSON object");const r=v as Record<string,unknown>;if(typeof r.device_id!=="string"||!r.device_id.trim())throw Error("Record "+(i+1)+": missing device_id");if(typeof r.timestamp!=="string"||!r.timestamp.trim()||!/[Zz]|[+-]\d\d:\d\d$/.test(r.timestamp)||Number.isNaN(Date.parse(r.timestamp)))throw Error("Record "+(i+1)+": timezone-aware timestamp required")});
+ return raw as Record<string,unknown>[];
+}
+export default function Import(){const [text,setText]=useState(""),[error,setError]=useState(""),[result,setResult]=useState<Upload|null>(null),[busy,setBusy]=useState(false),[drag,setDrag]=useState(false);const input=useRef<HTMLInputElement>(null);
+ const parsed=useMemo(()=>{try{return {rows:text.trim()?readRecords(text):[],error:""}}catch(e){return {rows:[],error:text.trim()?String(e):""}}},[text]);
+ async function takeFile(file?:File){if(!file)return;if(file.size>5_000_000){setError("File exceeds 5 MB browser limit.");return}setText(await file.text());setResult(null);setError("")}
+ async function send(){setError("");setBusy(true);try{const rows=readRecords(text);const out=await postJSON<Upload>("/api/telemetry/import",{records:rows});setResult(out)}catch(e){setError(String(e))}finally{setBusy(false)}}
+ return <><div className="eyebrow">SYSTEM / TELEMETRY INGESTION</div><h1 className="heading">Upload network telemetry</h1><p className="sub">Inspect each record before sending it to the existing five-agent analysis pipeline.</p>
+ <div className="upload-grid"><section className="panel"><div className="eyebrow">01 / SOURCE FILE</div><div className={"drop-target "+(drag?"dragged":"")} tabIndex={0} role="button" onKeyDown={e=>{if(e.key==="Enter")input.current?.click()}} onClick={()=>input.current?.click()} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);takeFile(e.dataTransfer.files[0])}}><UploadCloud size={34}/><b>Drop a telemetry JSON file</b><span>Or click to browse · JSON / 5 MB max</span></div><input ref={input} type="file" accept=".json,application/json" style={{display:"none"}} onChange={e=>takeFile(e.target.files?.[0])}/><label>JSON source<textarea spellCheck={false} className="json-editor" value={text} onChange={e=>{setText(e.target.value);setResult(null)}} placeholder='{"records":[{"device_id":"SW_01","timestamp":"2026-10-31T10:00:00Z","metrics":{"latency_ms":12}}]}'/></label><button disabled={!parsed.rows.length||busy} onClick={send}>{busy?"Processing saved diagnoses…":"Import and diagnose "+parsed.rows.length+" record(s) →"}</button>{(error||parsed.error)&&<p className="error">{error||parsed.error}</p>}</section>
+ <section className="panel"><div className="eyebrow">02 / PREFLIGHT</div><h2>{parsed.rows.length} valid formatted records</h2><p className="sub">Each record must contain a device ID and timezone-aware timestamp. The backend independently validates all records before import.</p><div className="table-wrap"><table><thead><tr><th>DEVICE ID</th><th>TIMESTAMP</th></tr></thead><tbody>{parsed.rows.slice(0,25).map((r,i)=><tr key={i}><td>{String(r.device_id)}</td><td>{String(r.timestamp)}</td></tr>)}</tbody></table></div>{parsed.rows.length>25&&<p className="sub">Showing first 25 records.</p>}</section></div>
+ {result&&<section className="panel"><div className="eyebrow">03 / IMPORT OUTCOME</div><h2>Processed {result.count} observations</h2><div className="table-wrap"><table><thead><tr><th>RECORD</th><th>DEVICE ID</th><th>STATUS</th><th>DIAGNOSIS</th><th>ACTION</th></tr></thead><tbody>{result.results.map(r=><tr key={r.index}><td>{r.record_id??r.index}</td><td>{r.device_id}</td><td><span className={"status "+(r.report?.status||"inconclusive")}>{r.error?"FAILED":r.report?.status}</span></td><td>{r.error||pretty(r.report?.suspected_root_cause||"")}</td><td>{r.record_id?<Link href={"/agents?record="+r.record_id}>Investigation ↗</Link>:"—"}</td></tr>)}</tbody></table></div></section>}
+ <p className="map-disclaimer">Bulk imports are saved to your configured backend database. Free Render web services have ephemeral local SQLite storage; persistent public history requires a managed database migration. No real hardware is polled.</p></>;
 }
