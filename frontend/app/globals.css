@@ -63,3 +63,24 @@ body{background-image:linear-gradient(120deg,rgba(166,114,62,.04) 1px,transparen
 .spatial-controls span{font:600 12px 'IBM Plex Mono',monospace;color:#82705c;white-space:nowrap}
 .spatial-playback .sub{margin-bottom:0}
 @media(max-width:650px){.spatial-playback{padding:16px}.spatial-controls{flex-wrap:wrap}}
+
+/* Phase 5: cartographic evidence desk and restrained historical line charts. */
+.incident-filters{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 18px}
+.incident-filters button{background:#f5eee2;border:1px solid #d1c5b4;color:#514d42;padding:11px 16px}
+.incident-filters button.selected{background:#30382f;color:#f5efdc;border-color:#30382f}
+.incident-layout{display:grid;grid-template-columns:minmax(230px,310px) minmax(0,1fr);gap:20px;align-items:start}
+.incident-list{display:flex;flex-direction:column;gap:8px;max-height:850px;overflow-y:auto}
+.incident-item{text-align:left;background:#fbf7ef;border:1px solid #ddd1c0;color:#333c32;border-left:4px solid #c1ae90;padding:18px;display:flex;flex-direction:column;gap:10px}
+.incident-item.selected{background:#e9ddc9;border-left-color:#b95232}
+.incident-item b{font-size:15px}.incident-item .smallmono{font-size:10px}
+.incident-inspector .panel:first-child{margin-top:0}
+.incident-score{font-size:38px;font-weight:800;letter-spacing:-1.5px;margin:26px 0;border-block:1px solid #d9cdbb;padding:24px 0}
+.incident-score small{display:block;font:500 11px 'IBM Plex Mono',monospace;letter-spacing:0;color:#82725e}
+.evidence-rows{border-top:1px solid #d8cbb9;margin:20px 0}
+.evidence-line{padding:13px 0;border-bottom:1px solid #d8cbb9;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:13px}
+.evidence-line strong{flex:1;min-width:145px}.evidence-line small{width:100%;font:500 11px 'IBM Plex Mono',monospace;color:#856b52}
+.trend-panel{margin-top:25px;background:#f4ecde}
+.trend-panel select{max-width:340px;display:block;margin:10px 0 18px}
+.trend-svg{display:block;width:100%;max-height:260px;overflow:visible}
+.trend-range{display:flex;justify-content:space-between;gap:20px;color:#857463;font:500 11px 'IBM Plex Mono',monospace}
+@media(max-width:900px){.incident-layout{grid-template-columns:1fr}.incident-list{max-height:300px}.trend-range{font-size:9px}}
