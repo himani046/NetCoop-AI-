@@ -89,7 +89,7 @@ CAMPUS_PLACES = [
     {"name": "Lalitgiri Lecture Hall", "lat": 20.14684, "lon": 85.67411},
     {"name": "Pushpagiri Lecture Hall", "lat": 20.14640, "lon": 85.67558},
     {"name": "Lab Complex", "lat": 20.14819, "lon": 85.67761},
-    {"name": "School of Humanities", "lat": 20.14591, "lon": 85.67773},
+    {"name": "IIT SHSSM", "lat": 20.14591, "lon": 85.67773},
 ]
 PLACE_SOURCES = "https://www.openstreetmap.org/#map=16/20.14797/85.67007"
 
@@ -324,12 +324,16 @@ elif page=="Campus map":
             if any(mapping[d]==place["name"] for d in matched):
                 place["color"]=[15,139,99,220]
                 place["state"]="Healthy in latest simulated test"
+    alert_places = [{**p, "alert_symbol":"⚠"} for p in places if p["state"].startswith("⚠")]
     st.pydeck_chart(pdk.Deck(
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         initial_view_state=pdk.ViewState(latitude=20.1472,longitude=85.6735,zoom=15.25,pitch=0),
         layers=[
             pdk.Layer("ScatterplotLayer",data=places,get_position="[lon, lat]",
                       get_fill_color="color",get_radius="radius",pickable=True,radius_min_pixels=7),
+            pdk.Layer("TextLayer",data=alert_places,get_position="[lon, lat]",get_text="alert_symbol",
+                      get_size=19,get_color=[255,255,255],get_pixel_offset=[0,0],
+                      get_text_anchor="'middle'",pickable=False),
             pdk.Layer("TextLayer",data=places,get_position="[lon, lat]",get_text="name",
                       get_size=13,get_color=[14,45,61],get_pixel_offset=[0,16],
                       get_text_anchor="'middle'",get_alignment_baseline="'top'",pickable=True),
