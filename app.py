@@ -223,27 +223,58 @@ state=st.session_state.get("diagnostic_state")
 report=state["final_report"] if state else latest_report_from_history(history)
 
 if page=="Overview":
-    heading("OPERATIONS / OVERVIEW","Campus network diagnostics",
-            "A concise view of the latest evaluated incident. All results are based on supplied test data.")
-    if history_error:
-        st.warning("Incident history unavailable: "+history_error)
-    m1,m2,m3,m4=st.columns(4)
-    m1.metric("Saved diagnostic runs",len(history))
-    m2.metric("Latest status",report["status"].upper() if report else "NO RUN")
-    m3.metric("Fault support",evidence_display(report["status"], report["confidence"]) if report else "—")
-    m4.metric("Active live monitors","0")
-    st.caption("Live monitoring is not connected. Saved results are historical synthetic diagnostic runs.")
-    if report:
-        st.subheader("Latest diagnosis")
-        report_detail(report)
+    heading("OPERATIONS / OVERVIEW", "Campus device health",
+            "One latest saved diagnosis per device ID, based on observation timestamps.")
+    try:
+        with session_factory(db_path)() as session:
+            devices=latest_device_records(session)
+    except Exception as exc:
+        devices=[]
+        st.warning(f"Inventory unavailable: {type(exc).__name__}: {exc}")
+    healthy=sum(r["status"]=="healthy" for r in devices)
+    faults=sum(r["status"]=="diagnosed" for r in devices)
+    uncertain=len(devices)-healthy-faults
+    col1,col2,col3,col4=st.columns(4)
+    col1.metric("Devices tracked",len(devices))
+    col2.metric("Healthy",healthy)
+    col3.metric("Fault detected",faults)
+    col4.metric("Unverified / limited",uncertain)
+    st.caption("Saved synthetic telemetry, not live campus device availability.")
+    st.subheader("Latest status by device")
+    if devices:
+        selected=st.segmented_control("Filter",["All","Faults","Healthy","Limited data"],default="All")
+        visible=[r for r in devices if selected=="All" or
+                 (selected=="Faults" and r["status"]=="diagnosed") or
+                 (selected=="Healthy" and r["status"]=="healthy") or
+                 (selected=="Limited data" and r["status"]=="inconclusive")]
+        visible.sort(key=lambda r:({"diagnosed":0,"inconclusive":1,"healthy":2}.get(r["status"],3),r["device_id"]))
+        for start in range(0,len(visible),3):
+            cols=st.columns(3)
+            for col,item in zip(cols,visible[start:start+3]):
+                with col:
+                    status=item["status"]
+                    color={"diagnosed":"#b42318","healthy":"#137b55","inconclusive":"#a87314"}.get(status,"#697586")
+                    status_label={"diagnosed":"FAULT DETECTED","healthy":"HEALTHY","inconclusive":"REVIEW REQUIRED"}.get(status,status.upper())
+                    summary=nice_cause(item["root_cause"]) if status=="diagnosed" else (
+                        "No fault detected" if status=="healthy" else item["display_status"])
+                    with st.container(border=True):
+                        st.caption("DEVICE ID")
+                        st.markdown("**"+item["device_id"]+"**")
+                        st.markdown(f':{ "red" if status=="diagnosed" else "green" if status=="healthy" else "orange" }[{status_label}]')
+                        st.write(summary)
+                        st.caption("Observed (UTC): "+(item["timestamp"] or "Unknown"))
+        st.subheader("Device inventory")
+        st.dataframe([{"Device ID":r["device_id"],"Observed (UTC)":r["timestamp"] or "Unknown",
+                       "Status":r["display_status"],
+                       "Diagnosis":nice_cause(r["root_cause"]) if r["status"]=="diagnosed" else r["status_detail"],
+                       "Fault evidence":evidence_display(r["status"],r["evidence_support"])}
+                      for r in devices],use_container_width=True,hide_index=True)
     else:
-        st.info("No diagnosis yet. Use Run diagnosis to evaluate a sample or supply telemetry.")
-    if history:
-        st.subheader("Recent incidents")
-        st.dataframe(history[:8],use_container_width=True,hide_index=True)
-    st.button("Run a new diagnosis →",on_click=lambda:st.session_state.update({"open_diagnose":True}))
-    if st.session_state.pop("open_diagnose",False):
-        st.info("Select 'Run diagnosis' in the left navigation.")
+        st.info("No saved device readings. Import telemetry to populate this dashboard.")
+    if report:
+        with st.expander("Latest processed incident"):
+            report_detail(report)
+    st.caption("Fault support is not a health probability; records reflect only supplied test data.")
 
 elif page=="Run diagnosis":
     heading("WORKSPACE / DIAGNOSIS","Run a network diagnosis",
