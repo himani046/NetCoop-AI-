@@ -1,0 +1,6 @@
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Activity, LayoutDashboard, Network, MapPinned, FileCode2 } from "lucide-react";
+const links=[{href:"/",name:"Overview",icon:LayoutDashboard},{href:"/devices",name:"Devices",icon:Network},{href:"/diagnose",name:"Diagnose",icon:Activity},{href:"/campus",name:"Campus",icon:MapPinned},{href:"/technical",name:"Technical",icon:FileCode2}];
+export function Sidebar(){const current=usePathname();return <aside className="sidebar"><div className="brand"><span className="brandmark">◈</span> NETCOOP<span className="branddot">.</span></div><p className="sidecaption">NETWORK OPERATIONS / IITBBS</p><nav>{links.map(x=><Link key={x.href} className={current===x.href?"nav active":"nav"} href={x.href}><x.icon size={17}/>{x.name}</Link>)}</nav><div className="sidebottom"><span className="live-dot"/> SYNTHETIC TELEMETRY<br/><small>No live campus network access</small></div></aside>}
