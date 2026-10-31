@@ -1,5 +1,7 @@
 """Parallel specialist agents, fan-in barrier, bounded conflict arbitration."""
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from langgraph.graph import StateGraph,START,END
 from src.graph.state import DiagnosticState
 from src.protocol.normalizer import normalize
