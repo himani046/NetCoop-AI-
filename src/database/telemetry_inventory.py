@@ -52,33 +52,63 @@ def observation_time(timestamp):
     return dt.astimezone(timezone.utc)
 
 
+def describe_observation(status: str, normalized: dict, report: dict | None = None) -> tuple[str, str]:
+    """Operator-facing explanation; never upgrades incomplete evidence to healthy."""
+    if status == "diagnosed":
+        return "FAULT DETECTED", "Measurements support a fault hypothesis."
+    if status == "healthy":
+        return "HEALTHY", "No fault detected across required telemetry domains in this snapshot."
+    if status != "inconclusive":
+        return "UNKNOWN", "Diagnostic status is not recognized."
+    from src.protocol.normalizer import METRICS
+    present = [k for k in METRICS if normalized.get(k) is not None]
+    if not present:
+        return "INSUFFICIENT DATA", "No usable diagnostic measurements were supplied."
+    missing = [k for k in METRICS if normalized.get(k) is None]
+    if report and report.get("supporting_evidence"):
+        return "INCONCLUSIVE", "Anomalies exist but evidence is insufficient to establish their cause."
+    return ("NO FAULT DETECTED · LIMITED DATA",
+            f"No confirmed fault in {len(present)} supplied metrics; {len(missing)} other measurements are unavailable.")
+
+
 def latest_device_records(session) -> list[dict]:
-    """Latest measured state per device; never use ingestion time as event time."""
+    """One latest observation per device, plus context from older fault reports."""
     rows = session.scalars(select(Incident).order_by(Incident.id.desc())).all()
-    latest = {}
+    by_device = {}
     for row in rows:
-        raw = json.loads(row.normalized_telemetry_json)
-        timestamp = raw.get("timestamp")
-        measured = observation_time(timestamp)
-        key = row.device_id
-        candidate = {
-            "device_id": key,
-            "timestamp": measured.isoformat() if measured else None,
-            "site": raw.get("site"),
-            "parent_id": raw.get("parent_id"),
-            "status": row.status,
-            "root_cause": row.suspected_root_cause,
-            "evidence_support": row.confidence,
-            "incident_id": row.incident_id,
-            "record_id": row.id,
-            "has_timestamp": measured is not None,
-        }
-        current = latest.get(key)
-        if current is None:
-            latest[key] = candidate
-        elif measured and (not current["has_timestamp"] or measured.isoformat() > current["timestamp"]):
-            latest[key] = candidate
-        elif measured and current["timestamp"] == measured.isoformat() and row.id > current["record_id"]:
-            latest[key] = candidate
-        # An untimestamped/older reading never overwrites a dated newer one.
-    return sorted(latest.values(), key=lambda item: item["device_id"])
+        normalized = json.loads(row.normalized_telemetry_json)
+        measured = observation_time(normalized.get("timestamp"))
+        by_device.setdefault(row.device_id, []).append((measured, row.id, row, normalized))
+    output = []
+    for device_id, observations in by_device.items():
+        observations.sort(key=lambda item: (item[0] is not None,
+                         item[0] or datetime.min.replace(tzinfo=timezone.utc), item[1]), reverse=True)
+        measured, _, latest, normalized = observations[0]
+        latest_report = json.loads(latest.report_json)
+        label, detail = describe_observation(latest.status, normalized, latest_report)
+        prior_fault = next((x for x in observations[1:]
+                            if x[2].status == "diagnosed" and
+                            (measured is None or x[0] is None or x[0] < measured)), None)
+        previous_fault = None
+        if prior_fault:
+            prior_report = json.loads(prior_fault[2].report_json)
+            evidence_keys = {x.get("metric") for x in prior_report.get("supporting_evidence", [])}
+            verified_again = bool(evidence_keys) and all(normalized.get(k) is not None for k in evidence_keys)
+            if latest.status == "inconclusive" and not verified_again:
+                previous_fault = prior_fault[2].suspected_root_cause
+                label = "PREVIOUS FAULT · NOT VERIFIED CLEARED"
+                detail = ("The latest snapshot lacks measurements required to verify recovery "
+                          f"from the earlier {previous_fault.replace('_', ' ')} fault.")
+            elif latest.status != "diagnosed" and verified_again:
+                detail += " Earlier fault indicators are available in the latest snapshot; review their values and trend."
+        output.append({
+            "device_id": device_id, "timestamp": measured.isoformat() if measured else None,
+            "site": normalized.get("site"), "parent_id": normalized.get("parent_id"),
+            "status": latest.status, "root_cause": latest.suspected_root_cause,
+            "evidence_support": latest.confidence, "incident_id": latest.incident_id,
+            "record_id": latest.id, "has_timestamp": measured is not None,
+            "display_status": label, "status_detail": detail,
+            "previous_fault": previous_fault,
+            "observation_count": len(observations),
+        })
+    return sorted(output, key=lambda item: item["device_id"])
