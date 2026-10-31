@@ -45,8 +45,26 @@ def test_graph_uses_validated_specialists():
     assert len(state["validated_messages"])==3
     assert state["final_report"]["suspected_root_cause"]=="link_congestion"
 
+def test_physical_fault_does_not_require_arbitration():
+    telemetry = scenarios()["link_congestion"] | {
+        "crc_errors": 15000,
+        "link_utilization_pct": 14,
+    }
+    state = diagnose(telemetry, "INC-PHYSICAL")
+    assert state["final_report"]["suspected_root_cause"] == "physical_interface_fault"
+    assert not any(m.get("message_type") == "arbitration" for m in state["messages"])
+
+
 def test_conflict_arbitration_trace():
-    telemetry=scenarios()["link_congestion"] | {"crc_errors":15000,"link_utilization_pct":14}
-    state=diagnose(telemetry,"INC-CONFLICT")
-    assert state["final_report"]["suspected_root_cause"]=="physical_interface_fault"
-    assert any(m.get("message_type")=="arbitration" for m in state["messages"])
+    # Performance sees link congestion; Connectivity sees an RF issue.
+    telemetry = scenarios()["link_congestion"] | {
+        "rssi_dbm": -86,
+        "snr_db": 8,
+        "retransmissions_pct": 42,
+    }
+    state = diagnose(telemetry, "INC-CONFLICT")
+    assert state["conflicts_detected"] is False
+    assert state["decision"]["conflicts"]
+    assert any(m.get("message_type") == "arbitration" for m in state["messages"])
+    assert any("Arbitration" in note for note in state["resolution_notes"])
+    assert state["retry_budget"] == 0
