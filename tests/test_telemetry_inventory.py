@@ -61,3 +61,36 @@ def test_previous_wifi_fault_not_verified_cleared(tmp_path,monkeypatch):
     assert current["status"]=="inconclusive"
     assert current["previous_fault"]=="weak_wifi_signal"
     assert current["display_status"]=="PREVIOUS FAULT · NOT VERIFIED CLEARED"
+
+def test_metric_interpretation_color_and_missing_values():
+    from src.database.telemetry_inventory import metric_interpretation
+    assert metric_interpretation("link_utilization_pct", 35)[0] == "green"
+    assert metric_interpretation("link_utilization_pct", 80)[0] == "yellow"
+    assert metric_interpretation("link_utilization_pct", 94)[0] == "red"
+    assert metric_interpretation("rssi_dbm", -86)[0] == "red"
+    assert metric_interpretation("rssi_dbm", -72)[0] == "yellow"
+    assert metric_interpretation("rssi_dbm", -53)[0] == "green"
+    assert metric_interpretation("crc_errors", 12450)[0] == "red"
+    assert metric_interpretation("dhcp_timeout_pct", 50)[0] == "red"
+    assert metric_interpretation("cpu_pct", None)[0] == "gray"
+    assert metric_interpretation("throughput_mbps", 120)[0] == "gray"
+
+def test_latest_device_metric_detail_uses_correct_record(tmp_path, monkeypatch):
+    from src.database.telemetry_inventory import latest_device_metrics
+    monkeypatch.delenv("NETCOOP_LLM_MODEL", raising=False)
+    db = tmp_path / "metric-details.db"
+    readings = [
+        {"device_id":"SW-METRICS","timestamp":"2026-10-31T12:00:00Z",
+         "link_utilization_pct":94,"latency_ms":280,"queue_drops":160},
+        {"device_id":"SW-METRICS","timestamp":"2026-10-31T11:00:00Z",
+         "link_utilization_pct":35,"latency_ms":20,"queue_drops":0},
+    ]
+    for i, raw in enumerate(readings):
+        with session_factory(db)() as session:
+            save_incident(session, raw, diagnose(raw, incident_id=f"INC-METRICS-{i}"))
+    with session_factory(db)() as session:
+        current = latest_device_records(session)[0]
+        detail = {row["metric"]:row for row in latest_device_metrics(session, current["record_id"])}
+    assert detail["link_utilization_pct"]["value"] == 94
+    assert detail["link_utilization_pct"]["level"] == "red"
+    assert detail["crc_errors"]["level"] == "gray"
