@@ -2,7 +2,7 @@
 import Link from "next/link";import dynamic from "next/dynamic";import {useEffect,useMemo,useState} from "react";import {motion} from "framer-motion";
 import {getJSON,Device,Summary,pretty} from "../lib/api";import {Status} from "./status";
 const Campus=dynamic(()=>import("./satellite-map").then(m=>m.SatelliteMap),{ssr:false,loading:()=> <div className="map-placeholder">Preparing campus map…</div>});
-export function Dashboard(){const [devices,setDevices]=useState<Device[]>([]),[summary,setSummary]=useState<Summary|null>(null),[error,setError]=useState("");
+export function Dashboard(){const [devices,setDevices]=useState<Device[]>([]),[summary,setSummary]=useState<Summary|null>(null),[mapAssignments,setMapAssignments]=useState<Record<string,string>>({}),[error,setError]=useState("");
  useEffect(()=>{Promise.all([getJSON<Device[]>("/api/devices/latest"),getJSON<Summary>("/api/overview/summary"),getJSON<{regions:{id:string;name:string}[];device_assignments:{device_id:string;region_id:string}[]}>("/api/map/regions")]).then(([d,s,m])=>{setDevices(d);setSummary(s);const names=Object.fromEntries(m.regions.map(r=>[r.id,r.name]));setMapAssignments(Object.fromEntries(m.device_assignments.map(a=>[a.device_id,names[a.region_id]||"Unmapped"])))}).catch(e=>setError(String(e)))},[]);
  const ordered=useMemo(()=>[...devices].sort((a,b)=>(a.status==="diagnosed"?0:a.status==="inconclusive"?1:2)-(b.status==="diagnosed"?0:b.status==="inconclusive"?1:2)),[devices]);
  const dist=[{label:"Healthy",count:summary?.healthy||0,color:"#29835b"},{label:"Diagnosed",count:summary?.faulty||0,color:"#d94b46"},{label:"Review required",count:summary?.unverified||0,color:"#d99a27"}];
