@@ -6,6 +6,7 @@ import src.graph.workflow as workflow
 
 def test_ai_advisory_retains_authoritative_cause(monkeypatch):
     monkeypatch.setenv("NETCOOP_LLM_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("NETCOOP_GEMINI_AGENT_REVIEWS", "0")
     def mock_review(telemetry, findings, deterministic_cause):
         assert deterministic_cause == "link_congestion"
         return SecondOpinion(
@@ -23,6 +24,7 @@ def test_ai_advisory_retains_authoritative_cause(monkeypatch):
 
 def test_ai_failure_is_nonfatal(monkeypatch):
     monkeypatch.setenv("NETCOOP_LLM_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("NETCOOP_GEMINI_AGENT_REVIEWS", "0")
     monkeypatch.setattr(workflow, "structured_second_opinion",
                         lambda *args: (None, "AI unavailable; deterministic diagnosis retained"))
     state=diagnose(scenarios()["interface_fault"],"INC-AI-FAILURE")
