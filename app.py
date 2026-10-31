@@ -11,6 +11,7 @@ from src.graph.workflow import diagnose
 from src.utils.synthetic_data import scenarios
 from src.database.session import session_factory
 from src.database.repository import save_incident, list_incidents, get_incident
+from src.database.telemetry_inventory import parse_telemetry_batch, latest_device_records, observation_time
 
 st.set_page_config(page_title="NetCoop | Network operations", page_icon="◈", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -194,7 +195,7 @@ def latest_report_from_history(history):
 with st.sidebar:
     st.markdown("## ◈ NETCOOP")
     st.caption("NETWORK OPERATIONS / IITBBS")
-    page = st.radio("WORKSPACE", ["Overview","Run diagnosis","Campus map","Technical records"],label_visibility="collapsed")
+    page = st.radio("WORKSPACE", ["Overview","Run diagnosis","Import telemetry","Campus map","Technical records"],label_visibility="collapsed")
     st.divider()
     st.caption("DATA SOURCE")
     st.markdown("**Synthetic / test telemetry**")
@@ -293,6 +294,63 @@ elif page=="Run diagnosis":
         st.download_button("Download diagnostic report",json.dumps(state["final_report"],indent=2),
                            file_name="netcoop-incident.json",mime="application/json")
 
+
+elif page=="Import telemetry":
+    heading("WORKSPACE / INGESTION","Import device telemetry",
+            "Paste or upload one reading, a JSON array, or JSONL. No scenario selection required.")
+    uploaded=st.file_uploader("Upload JSON / JSONL",type=["json","jsonl","txt"])
+    pasted=st.text_area("Or paste telemetry",height=200,
+                        placeholder='[{"device_id":"SW-01","timestamp":"2026-10-31T10:00:00Z","latency_ms":24}]')
+    st.caption("A valid device ID and ISO timestamp with timezone are required for device history. All observations are retained.")
+    with_ai=st.checkbox("Run optional Gemini reviews per record",value=False,
+                        help="Bulk uploads can make many API requests. Deterministic diagnosis is enabled by default.")
+    if st.button("Import and diagnose",type="primary"):
+        try:
+            from src.protocol.normalizer import normalize
+            source=pasted if pasted.strip() else (uploaded.getvalue().decode("utf-8-sig") if uploaded else "")
+            records=parse_telemetry_batch(source)
+            prepared=[]
+            for pos,raw_record in enumerate(records,1):
+                n,w=normalize(raw_record)
+                if n["device_id"]=="UNKNOWN":
+                    raise ValueError(f"Record {pos}: device_id is required")
+                timestamp=observation_time(n.get("timestamp"))
+                if timestamp is None:
+                    raise ValueError(f"Record {pos}: valid timezone-aware timestamp required")
+                prepared.append((raw_record,n["device_id"],timestamp,w))
+            import os
+            prev=os.environ.get("NETCOOP_LLM_MODEL")
+            results=[]
+            progress=st.progress(0)
+            try:
+                if not with_ai:os.environ["NETCOOP_LLM_MODEL"]=""
+                for idx,(raw_record,device,timestamp,warnings) in enumerate(prepared):
+                    try:
+                        state_new=diagnose(raw_record,incident_id="INC-"+uuid.uuid4().hex[:8].upper())
+                        with session_factory(db_path)() as session:
+                            pk=save_incident(session,raw_record,state_new)
+                        r=state_new["final_report"]
+                        results.append({"Device ID":device,"Timestamp (UTC)":timestamp.isoformat(),
+                                        "Status":r["status"].upper(),"Diagnosis":nice_cause(r["suspected_root_cause"]),
+                                        "Evidence support":f'{r["confidence"]:.1%}',"Record":pk,
+                                        "Warnings":len(warnings)})
+                        st.session_state["diagnostic_state"]=state_new
+                    except Exception as exc:
+                        results.append({"Device ID":device,"Timestamp (UTC)":timestamp.isoformat(),
+                                        "Status":"FAILED","Diagnosis":str(exc)[:110],"Evidence support":"—",
+                                        "Record":"—","Warnings":len(warnings)})
+                    progress.progress((idx+1)/len(prepared))
+            finally:
+                if prev is None:os.environ.pop("NETCOOP_LLM_MODEL",None)
+                else:os.environ["NETCOOP_LLM_MODEL"]=prev
+            st.session_state["last_import_results"]=results
+        except Exception as exc:
+            st.error(f"Import validation failed: {type(exc).__name__}: {exc}")
+    if st.session_state.get("last_import_results"):
+        st.subheader("Imported observations")
+        st.dataframe(st.session_state["last_import_results"],use_container_width=True,hide_index=True)
+        st.caption("View the latest reading for each device under Campus map.")
+
 elif page=="Campus map":
     heading("CAMPUS / GEOGRAPHY","IIT Bhubaneswar campus map",
             "OpenStreetMap basemap · Argul permanent campus · Verified points of interest")
@@ -344,6 +402,23 @@ elif page=="Campus map":
     ),use_container_width=True)
     st.caption("Map and named places: © OpenStreetMap contributors. Marker positions are reference POIs, not network equipment coordinates.")
     st.link_button("Open full campus map",PLACE_SOURCES)
+
+    st.subheader("Latest telemetry by device ID")
+    try:
+        with session_factory(db_path)() as session:
+            inventory=latest_device_records(session)
+        if inventory:
+            st.dataframe([{"Device ID":r["device_id"],"Observed (UTC)":r["timestamp"] or "Unknown",
+                           "Site":r["site"],"Status":r["status"].upper(),
+                           "Fault":nice_cause(r["root_cause"]),
+                           "Evidence":f'{r["evidence_support"]:.1%}',
+                           "Record":r["record_id"]} for r in inventory],
+                         use_container_width=True,hide_index=True)
+            st.caption("Latest means highest valid observation timestamp per device, not upload order. Undated legacy runs are labeled.")
+        else:
+            st.info("Import telemetry to build a device inventory.")
+    except Exception as exc:
+        st.warning(f"Inventory unavailable: {type(exc).__name__}: {exc}")
     st.subheader("Incident location & connectivity")
     if report:
         if report["status"]=="diagnosed":
