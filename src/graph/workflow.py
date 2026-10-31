@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph,START,END
 from src.graph.state import DiagnosticState
 from src.protocol.normalizer import normalize
 from src.protocol.models import AgentEnvelope,AgentFinding
+from src.protocol.validator import validate_messages
 from src.agents.performance import PerformanceAgent
 from src.agents.infrastructure import InfrastructureAgent
 from src.agents.connectivity import ConnectivityAgent
@@ -21,8 +22,16 @@ def agent_node(agent,field):
   return {field:f.model_dump(mode="json"),"messages":[msg.model_dump(mode="json")]}
  return run
 def decision_node(state:DiagnosticState,arbitration:bool=False)->dict:
- fs=[AgentFinding.model_validate(state[k]) for k in ("tpa_finding","iha_finding","cta_finding")]
- d=correlate(state["normalized_telemetry"],fs,state["warnings"],arbitration=arbitration)
+ raw_messages=[m for m in state.get("messages",[]) if isinstance(m,dict) and "payload" in m]
+ accepted, protocol_warnings=validate_messages(raw_messages,state["incident_id"])
+ fs=[m.payload for m in accepted]
+ d=correlate(state["normalized_telemetry"],fs,[*state["warnings"],*protocol_warnings],arbitration=arbitration)
+ if protocol_warnings:
+  d["resolution_notes"].extend(protocol_warnings)
+  d["cause"]=None
+  d["confidence"]=0.0
+  d["inconclusive"]=True
+  d["resolution_notes"].append("ACP validation incomplete: diagnosis withheld pending all specialist findings")
  if arbitration or d["inconclusive"]:
   opinion,warning=structured_second_opinion(state["normalized_telemetry"],[f.model_dump(mode="json") for f in fs])
   if opinion is not None:
@@ -31,7 +40,7 @@ def decision_node(state:DiagnosticState,arbitration:bool=False)->dict:
    if opinion.suggested_cause!=d["cause"]:d["resolution_notes"].append("LLM differs from deterministic evidence; no automatic override")
   elif warning and "disabled" not in warning:d["resolution_notes"].append(warning)
  message={"message_type":"arbitration" if arbitration else "correlation","sender":"correlation_agent","recipient":"reporting_agent","correlation_id":state["incident_id"],"decision":{"cause":d["cause"],"confidence":d["confidence"],"conflicts":d["conflicts"]}}
- return {"decision":d,"conflicts_detected":bool(d["conflicts"]) and not arbitration,"resolution_notes":d["resolution_notes"],"retry_budget":max(0,state.get("retry_budget",0)-1) if arbitration else state.get("retry_budget",0),"messages":[message]}
+ return {"validated_messages":[m.model_dump(mode="json") for m in accepted],"decision":d,"conflicts_detected":bool(d["conflicts"]) and not arbitration,"resolution_notes":d["resolution_notes"],"retry_budget":max(0,state.get("retry_budget",0)-1) if arbitration else state.get("retry_budget",0),"messages":[message]}
 def route(state:DiagnosticState)->str:
  return "arbitration" if state.get("conflicts_detected") and state.get("retry_budget",0)>0 else "reporting"
 def reporting_node(state:DiagnosticState)->dict:
