@@ -12,6 +12,7 @@ from sqlalchemy import select
 from src.database.models import Incident, Base
 from api.campus import DemoAssignment, REGIONS, campus_snapshot, historical_campus_frames
 from api.playback import playback_events, investigation
+from api.intelligence import device_trends, evidence_explanation, incident_brief
 from src.database.repository import get_incident, list_incidents, save_incident
 from src.database.session import session_factory
 from src.database.telemetry_inventory import (
@@ -210,3 +211,24 @@ def map_history(limit: int = Query(500, ge=1, le=500)):
     return {**result, "excluded_undated":history["excluded_undated"],
             "truncated_source":history["truncated_source"],
             "event_limit":limit}
+
+@app.get("/api/devices/{device_id}/trends")
+def trends(device_id: str, limit: int = Query(100, ge=1, le=500)):
+    with db_session() as session:
+        result=device_trends(session,device_id,limit)
+    if result is None:
+        raise HTTPException(404,"Device not found")
+    return result
+
+@app.get("/api/incidents/{record_id}/evidence")
+def incident_evidence(record_id: int):
+    with db_session() as session:
+        item=get_incident(session,record_id)
+    if item is None:
+        raise HTTPException(404,"Incident not found")
+    return evidence_explanation(item)
+
+@app.get("/api/intelligence/incidents")
+def incident_intelligence(limit: int = Query(100, ge=1, le=200)):
+    with db_session() as session:
+        return incident_brief(session,limit)
