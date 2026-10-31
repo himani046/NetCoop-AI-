@@ -11,6 +11,8 @@ class DiagnosticState(TypedDict,total=False):
  messages:Annotated[list[dict[str,Any]],operator.add]
  validated_messages:list[dict[str,Any]]
  gemini_agent_reviews:Annotated[list[dict[str,Any]],operator.add]
+ gemini_report_review:dict[str,Any]|None
+ gemini_report_warning:str|None
  conflicts_detected:bool
  resolution_notes:list[str]
  decision:dict[str,Any]
