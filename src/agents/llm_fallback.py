@@ -27,7 +27,7 @@ def structured_second_opinion(telemetry: dict, findings: list[dict],
         return None, "AI disabled: NETCOOP_LLM_MODEL not configured"
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(model=model).with_structured_output(SecondOpinion)
+        llm = ChatGoogleGenerativeAI(model=model, timeout=float(os.getenv('NETCOOP_GEMINI_TIMEOUT_SECONDS', '20')), max_retries=1).with_structured_output(SecondOpinion)
         allowed = {key: val for key,val in telemetry.items()
                    if isinstance(val, (int,float)) and not isinstance(val,bool)}
         prompts = [
