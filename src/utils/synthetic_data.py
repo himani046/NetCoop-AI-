@@ -1,0 +1,5 @@
+"""Deterministic synthetic telemetry benchmark scenarios."""
+BASE={"timestamp":"2026-10-31T10:00:00Z","device_id":"HOSTEL_CORE_SW_01","site":"Hostel-A","parent_id":"CAMPUS_CORE_RTR_01","link_utilization_pct":35,"latency_ms":24,"packet_loss_pct":0,"jitter_ms":4,"queue_drops":0,"cpu_pct":23,"memory_pct":40,"crc_errors":0,"rssi_dbm":-53,"snr_db":32,"retransmissions_pct":2,"dhcp_timeout_pct":0,"dns_latency_ms":35,"gateway_ping_ms":1,"throughput_mbps":120}
+def scenarios()->dict[str,dict]:
+ def upd(**kw):return BASE|kw
+ return {"normal_operation":upd(),"link_congestion":upd(link_utilization_pct=94,queue_drops=160,latency_ms=280,packet_loss_pct=12),"weak_wifi_signal":upd(device_id="HOSTEL_AP_WING_B",site="Hostel-B-Wing",parent_id="HOSTEL_ACCESS_SW_02",rssi_dbm=-86,snr_db=8,retransmissions_pct=42,latency_ms=95),"interface_fault":upd(device_id="DEPT_ACCESS_SW_02",link_utilization_pct=14,latency_ms=190,crc_errors=12450,queue_drops=0),"dhcp_dns_failure":upd(device_id="HOSTEL_DHCP_RELAY",dhcp_timeout_pct=100,gateway_ping_ms=1,dns_latency_ms=35),"malformed_and_missing_data":{"lat_val":"240ms","util":"94%","drops":"160","device":"HOSTEL_SW_PARTIAL"}}
