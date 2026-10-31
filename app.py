@@ -7,7 +7,7 @@ from src.database.session import session_factory
 from src.database.repository import save_incident, list_incidents, get_incident
 st.set_page_config(page_title="NetCoop AI",page_icon="🌐",layout="wide")
 st.title("🌐 NetCoop AI · Multi-Agent Network Diagnostics")
-st.caption("Evidence-first campus diagnosis · LangGraph fan-out/fan-in · ACP 1.2.0")
+st.caption("Evidence-first campus diagnosis · LangGraph fan-out/fan-in · ACP 1.2.0 · Optional Gemini reviews")
 fixtures=scenarios()
 scenario=st.selectbox("Benchmark scenario",list(fixtures))
 persist=st.checkbox("Save diagnosis to SQLite",value=True)
@@ -39,12 +39,20 @@ if "diagnostic_state" in st.session_state:
   with st.expander(f'{i}. {msg["sender"]} → {msg["recipient"]}'):st.json(msg)
  st.subheader("Evidence and arbitration")
  st.json({"conflicts":state["decision"]["conflicts"],"resolution_notes":state["resolution_notes"]})
+ if state.get("gemini_agent_reviews"):
+  st.subheader("Gemini specialist agent reviews")
+  st.caption("These advisory reviews do not replace the ACP findings.")
+  for item in state["gemini_agent_reviews"]:
+   with st.expander(item["agent_id"]):st.json(item["review"] or {"warning":item.get("warning")})
+ if state.get("gemini_report_review"):
+  st.subheader("Gemini Reporting Agent summary")
+  st.json(state["gemini_report_review"])
  if state["decision"].get("ai_review"):
-  st.subheader("AI Advisory Review")
+  st.subheader("Gemini Correlation Agent review")
   st.caption("Optional LLM second opinion: it cannot override evidence-based root cause or confidence.")
   st.json(state["decision"]["ai_review"])
  elif any("AI unavailable" in note for note in state.get("resolution_notes",[])):
-  st.info("AI review unavailable; deterministic diagnosis completed normally.")
+  st.info("Gemini review unavailable; deterministic diagnosis completed normally.")
  st.subheader("Final report");st.json(r)
  st.download_button("Download incident JSON",json.dumps(r,indent=2),"incident-report.json","application/json")
  st.download_button("Download post-mortem Markdown",state["markdown_report"],"incident-postmortem.md","text/markdown")
