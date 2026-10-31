@@ -44,7 +44,7 @@ class ReportEvidence(ImmutableModel):
  interpretation:str
 class FinalDiagnosticReport(ImmutableModel):
  incident_id:str
- status:Literal["diagnosed","inconclusive"]
+ status:Literal["healthy","diagnosed","inconclusive"]
  suspected_root_cause:str
  confidence:float=Field(ge=0,le=1)
  affected_devices:list[str]
