@@ -14,7 +14,7 @@ def test_faults(scenario,cause):
  assert r["evidence_sources"]
 def test_normal_no_false_alarm():
  r=diagnose(scenarios()["normal_operation"])["final_report"]
- assert r["status"]=="inconclusive" and r["confidence"]==0
+ assert r["status"]=="healthy" and r["confidence"]==0
 def test_malformed_handled():
  s=diagnose(scenarios()["malformed_and_missing_data"])
  assert s["normalized_telemetry"]["latency_ms"]==240
