@@ -120,7 +120,7 @@ def report_brief(report, normalized=None):
     if report["status"] == "healthy":
         st.success("No anomaly detected in the evaluated telemetry snapshot.")
     elif report["status"] == "inconclusive":
-        st.warning("Evidence is insufficient for a reliable diagnosis.")
+        st.warning(explanation or "Available measurements do not support a reliable diagnosis; collect missing telemetry.")
     else:
         st.error("Fault detected in simulated network telemetry. Operator review recommended.")
 
