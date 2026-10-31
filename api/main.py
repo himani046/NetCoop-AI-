@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from src.database.models import Incident, Base
 from api.campus import DemoAssignment, REGIONS, campus_snapshot
+from api.playback import playback_events, investigation
 from src.database.repository import get_incident, list_incidents, save_incident
 from src.database.session import session_factory
 from src.database.telemetry_inventory import (
@@ -187,3 +188,16 @@ def assign_region(input: AssignmentInput):
                 session.add(DemoAssignment(device_id=input.device_id, region_id=input.region_id))
         session.commit()
     return {"device_id": input.device_id, "region_id": input.region_id, "mode": "manual_demo_only"}
+
+@app.get("/api/playback/events")
+def events(limit: int = Query(500,ge=1,le=500)):
+    with db_session() as session:
+        return playback_events(session, limit)
+
+@app.get("/api/incidents/{record_id}/investigation")
+def incident_investigation(record_id: int):
+    with db_session() as session:
+        item=get_incident(session,record_id)
+    if item is None:
+        raise HTTPException(404,"Incident not found")
+    return investigation(item)
