@@ -37,6 +37,7 @@ Open http://localhost:3000. The API docs are at http://localhost:8000/docs. Run 
 - `/`: latest-per-device operational overview and counts
 - `/devices`: device inventory and color-coded metrics
 - `/diagnose`: run the existing five-agent workflow against a custom JSON object
+- `/import`: upload or paste multiple JSON telemetry readings, retaining per-device history
 - `/campus`: geographic reference POIs (no fake network topology)
 - `/technical`: separate saved incident JSON and ACP message log
 
