@@ -34,6 +34,13 @@ def correlate(t,findings,warnings,arbitration=False):
  alternatives=[x for x in PRIORITY if x!=candidate and x in hypotheses]
  if candidate=="link_congestion":alternatives.append("upstream_link_congestion")
  healthy_keys={"link_utilization_pct","latency_ms","packet_loss_pct","cpu_pct","memory_pct","crc_errors","rssi_dbm","snr_db","dhcp_timeout_pct","dns_latency_ms","gateway_ping_ms"}
- complete=healthy_keys.issubset(t) and all(f.status=="HEALTHY" for f in findings) and len(findings)==3 and not warnings and not conflicts and not candidate
+ # Metadata warnings do not invalidate complete, normal numeric telemetry.
+ # Numeric-quality, schema and ACP warnings still block a positive health claim.
+ metadata_warnings = {"Missing site", "Missing parent_id", "Missing timestamp; temporal correlation limited",
+                      "Input status is an external label, not diagnostic evidence"}
+ blocking_warnings = [w for w in warnings if w not in metadata_warnings]
+ complete=(all(t.get(k) is not None for k in healthy_keys)
+           and all(f.status=="HEALTHY" for f in findings) and len(findings)==3
+           and not blocking_warnings and not conflicts and not candidate)
  if complete:notes.append("No anomalies detected across complete required telemetry snapshot")
  return {"healthy":complete,"cause":candidate,"confidence":confidence,"evidence":diagnostic if candidate else evidence,"alternatives":list(dict.fromkeys(alternatives)),"conflicts":conflicts,"resolution_notes":notes,"inconclusive":not bool(candidate),"warnings":warnings}
