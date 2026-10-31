@@ -107,6 +107,10 @@ def status_html(status):
     return f'<span class="nc-status nc-{safe}">{safe.upper()}</span>'
 
 
+def evidence_display(status, confidence):
+    return f"{confidence:.1%}" if status == "diagnosed" else "—"
+
+
 def nice_cause(cause):
     return CAUSE_LABELS.get(cause, (cause or "Insufficient evidence").replace("_", " ").title())
 
