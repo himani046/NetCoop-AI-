@@ -5,7 +5,7 @@ from src.utils.synthetic_data import scenarios
 import src.graph.workflow as workflow
 
 def test_ai_advisory_retains_authoritative_cause(monkeypatch):
-    monkeypatch.setenv("NETCOOP_LLM_MODEL", "openai:gpt-5-mini")
+    monkeypatch.setenv("NETCOOP_LLM_MODEL", "gemini-2.5-flash")
     def mock_review(telemetry, findings, deterministic_cause):
         assert deterministic_cause == "link_congestion"
         return SecondOpinion(
@@ -22,7 +22,7 @@ def test_ai_advisory_retains_authoritative_cause(monkeypatch):
     assert any("no automatic override" in note for note in state["resolution_notes"])
 
 def test_ai_failure_is_nonfatal(monkeypatch):
-    monkeypatch.setenv("NETCOOP_LLM_MODEL", "openai:gpt-5-mini")
+    monkeypatch.setenv("NETCOOP_LLM_MODEL", "gemini-2.5-flash")
     monkeypatch.setattr(workflow, "structured_second_opinion",
                         lambda *args: (None, "AI unavailable; deterministic diagnosis retained"))
     state=diagnose(scenarios()["interface_fault"],"INC-AI-FAILURE")
