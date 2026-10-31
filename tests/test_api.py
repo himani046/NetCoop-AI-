@@ -137,3 +137,49 @@ def test_phase4_spatial_playback_no_assigned_devices(client):
     assert frames[0]["device_count"]==1
     assert frames[0]["mapped_device_count"]==0
     assert all(r["status"]=="unmonitored" for r in frames[0]["regions"])
+
+def test_phase5_device_trends_are_timestamp_ordered(client):
+    latest={"device_id":"SW-TRENDS","timestamp":"2026-10-31T12:00:00Z",
+            "link_utilization_pct":31,"latency_ms":12,"packet_loss_pct":0}
+    earlier={"device_id":"SW-TRENDS","timestamp":"2026-10-31T11:00:00Z",
+             "link_utilization_pct":94,"latency_ms":280,"packet_loss_pct":12,
+             "queue_drops":160}
+    client.post("/api/diagnose",json={"telemetry":latest})
+    client.post("/api/diagnose",json={"telemetry":earlier})
+    r=client.get("/api/devices/SW-TRENDS/trends")
+    assert r.status_code==200,r.text
+    points=r.json()["points"]
+    assert [p["metrics"]["latency_ms"] for p in points]==[280,12]
+    assert points[0]["status"]=="diagnosed"
+    assert client.get("/api/devices/SW-TRENDS/trends?limit=1").json()["points"][0]["metrics"]["latency_ms"]==12
+    assert client.get("/api/devices/MISSING/trends").status_code==404
+    assert client.get("/api/devices/SW-TRENDS/trends?limit=501").status_code==422
+
+
+def test_phase5_incident_evidence_is_auditable_not_a_probability(client):
+    faulty={"device_id":"SW-EVIDENCE","timestamp":"2026-10-31T10:00:00Z",
+            "link_utilization_pct":94,"latency_ms":280,
+            "packet_loss_pct":12,"queue_drops":160}
+    recorded=client.post("/api/diagnose",json={"telemetry":faulty}).json()
+    pk=recorded["record_id"]
+    response=client.get(f"/api/incidents/{pk}/evidence")
+    assert response.status_code==200,response.text
+    audit=response.json()
+    assert audit["applicable"]
+    assert audit["score"]==recorded["report"]["confidence"]
+    assert audit["items"]
+    assert audit["conflict_penalty"]=="not persisted"
+    briefing=client.get("/api/intelligence/incidents").json()
+    assert briefing[0]["record_id"]==pk
+    assert briefing[0]["report"]["recommended_actions"]
+    assert client.get("/api/incidents/999999/evidence").status_code==404
+    assert client.get("/api/intelligence/incidents?limit=201").status_code==422
+
+
+def test_phase5_healthy_evidence_is_not_fake_health_probability(client):
+    raw={"device_id":"SW-OK","timestamp":"2026-10-31T10:00:00Z",
+         "latency_ms":12,"packet_loss_pct":0,"queue_drops":0}
+    data=client.post("/api/diagnose",json={"telemetry":raw}).json()
+    result=client.get(f'/api/incidents/{data["record_id"]}/evidence').json()
+    assert result["applicable"] is False
+    assert result["score"] is None
