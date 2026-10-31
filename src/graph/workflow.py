@@ -56,8 +56,6 @@ def reporting_node(state:DiagnosticState)->dict:
    output["calibrated_correctness_probability"]=p
    if p is None:output["limitations"].append("Insufficient independent calibration samples in score bin")
   except (ValueError,KeyError,OSError,TypeError) as exc:output["limitations"].append(f"Invalid calibration model: {exc}")
- if state["decision"].get("ai_review"):
-  output["ai_review"]=state["decision"]["ai_review"]
  return {"final_report":output,"markdown_report":markdown_report(r),"messages":[{"message_type":"final_report","sender":"reporting_agent","recipient":"operator","correlation_id":state["incident_id"],"status":r.status}]}
 def build_graph():
  g=StateGraph(DiagnosticState)
