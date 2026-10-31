@@ -266,3 +266,13 @@ Run `python -m streamlit run app.py`. A working internet connection is needed fo
 - IIT SHSSM: https://mapcarta.com/W1302319395
 
 A true live campus network map requires authorized telemetry sources, audited device-to-location assignments, and validated link topology. The supplied hackathon problem statement explicitly permits synthetic telemetry and does not require production network access.
+
+## Device telemetry import and latest-status inventory
+
+Use **Import telemetry** in the sidebar to paste an individual JSON object, a JSON array of readings, an object with `records` / `telemetry` list, or JSONL, or upload a .json/.jsonl/.txt file. No scenario selection is necessary. An import can contain multiple device IDs and multiple observations for one device. Each record is independently normalized, diagnosed by the five functional agents, and persisted in SQLite with its full original and normalized telemetry, incident report, and agent-message history. Bulk imports default to deterministic offline analysis to prevent excessive Gemini API calls; optional Gemini reviews can be enabled.
+
+For the **Campus map** device inventory, records are grouped by `device_id` and the latest valid **telemetry observation timestamp in UTC** is chosen, not the insertion time or the last processed record. Older uploads do not replace newer measurements. For equal timestamps, the most recently saved record takes precedence. Legacy records missing a parseable timestamp remain in history but are secondary to timestamped observations.
+
+Imports require a nonempty known device ID and a timezone-aware ISO 8601 timestamp. Invalid imports are rejected before processing the batch; run failures during processing are listed per record. This is a test-data device dashboard, not a production campus monitoring feed. Map red/amber/green indicators are based on each mapped device's latest persisted result; building-to-device associations must be manually specified for demonstration, and are not verified network topology.
+
+Run the tests with `python -m pytest tests/test_telemetry_inventory.py -v`.
