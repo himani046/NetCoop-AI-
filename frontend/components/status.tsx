@@ -1,0 +1,1 @@
+export function Status({status}:{status:string}){const label=status==="diagnosed"?"FAULT DETECTED":status==="healthy"?"HEALTHY":"REVIEW REQUIRED";return <span className={"status "+status}><span className="status-dot"/>{label}</span>}
