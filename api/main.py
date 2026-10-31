@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.database.models import Incident, Base
-from api.campus import DemoAssignment, REGIONS, campus_snapshot
+from api.campus import DemoAssignment, REGIONS, campus_snapshot, historical_campus_frames
 from api.playback import playback_events, investigation
 from src.database.repository import get_incident, list_incidents, save_incident
 from src.database.session import session_factory
@@ -201,3 +201,12 @@ def incident_investigation(record_id: int):
     if item is None:
         raise HTTPException(404,"Incident not found")
     return investigation(item)
+
+@app.get("/api/map/history")
+def map_history(limit: int = Query(500, ge=1, le=500)):
+    with db_session() as session:
+        history = playback_events(session, limit)
+        result = historical_campus_frames(session, history["events"])
+    return {**result, "excluded_undated":history["excluded_undated"],
+            "truncated_source":history["truncated_source"],
+            "event_limit":limit}
