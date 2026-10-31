@@ -7,7 +7,7 @@ ALIASES={
 "queue_drops":["drops","egress_drops","queue_drop_count"],
 "latency_ms":["rtt","ping_ms","latency","lat_val","response_time_ms"],
 "jitter_ms":["jitter","jitter_val"],"packet_loss_pct":["packet_loss","loss","ping_loss","packet_loss_percent"],
-"throughput_mbps":["throughput","bandwidth_mbps","transfer_rate"],"cpu_pct":["cpu","cpu_usage","cpu_utilization"],
+"throughput_mbps":["throughput","bandwidth_mbps","transfer_rate"],"cpu_pct":["cpu","cpu_usage","cpu_utilization","cpu_utilization_pct"],
 "memory_pct":["memory","mem_usage","memory_utilization"],"crc_errors":["crc","interface_crc","crc_error_count"],
 "rssi_dbm":["rssi","signal_strength","wifi_rssi"],"snr_db":["snr","signal_to_noise"],
 "retransmissions_pct":["retries","retry_rate","frame_retransmissions"],
@@ -24,9 +24,22 @@ def normalize(raw:Any)->tuple[dict[str,Any],list[str]]:
  if not isinstance(raw,dict):
   return {k:None for k in METRICS}|{"device_id":"UNKNOWN","timestamp":None,"parent_id":"UNKNOWN","site":"UNKNOWN"},["Telemetry must be a JSON object"]
  out={}
+ nested=raw.get("metrics",{})
+ if nested is None:nested={}
+ if not isinstance(nested,dict):
+  warnings.append("metrics must be a JSON object; nested measurements ignored")
+  nested={}
+ merged={**nested,**{k:v for k,v in raw.items() if k!="metrics"}}
+ if "status" in merged:
+  warnings.append("Input status is an external label, not diagnostic evidence")
+  merged.pop("status")
+ for key in ("interface_errors",):
+  if key in merged:
+   warnings.append("interface_errors is not necessarily CRC errors; preserved as unclassified telemetry")
+   out[key]=merged.pop(key)
  for key in ("topology","affected_device_ids"):
-  if key in raw:out[key]=raw[key]
- for rawkey,value in raw.items():
+  if key in merged:out[key]=merged[key]
+ for rawkey,value in merged.items():
   if rawkey in ("topology","affected_device_ids"):continue
   key=KEYS.get(str(rawkey).strip().lower())
   if not key:warnings.append(f"Unrecognized telemetry key: {rawkey}");continue
