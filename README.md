@@ -26,6 +26,81 @@ python main.py --file colab_sample.json
 
 ## Colab dataset
 
+Here are some test cases if you see 0 in the dashsboard Please go to upload Tab https://netcoop-ui.onrender.com/import and paste these test cases and run 
+
+[
+  {
+    "timestamp": "2026-11-01T01:18:34.242285Z",
+    "device_id": "SW_CAMPUS_4",
+    "metrics": {
+      "cpu_utilization_pct": 19.15,
+      "link_utilization_pct": 23.07,
+      "packet_loss_pct": 0.0,
+      "latency_ms": 10.05,
+      "jitter_ms": 2.0,
+      "queue_drops": 0
+    }
+  },
+  {
+    "timestamp": "2026-11-01T01:18:34.242325Z",
+    "device_id": "SW_CAMPUS_7",
+    "metrics": {
+      "cpu_utilization_pct": 47.07,
+      "link_utilization_pct": 62.32,
+      "packet_loss_pct": 1.07,
+      "latency_ms": 367.66,
+      "jitter_ms": 40.21,
+      "queue_drops": 47
+    }
+  },
+  {
+    "timestamp": "2026-11-01T01:18:34.242340Z",
+    "device_id": "SW_CAMPUS_5",
+    "metrics": {
+      "cpu_utilization_pct": 99.9,
+      "link_utilization_pct": 100.0,
+      "packet_loss_pct": 25.92,
+      "latency_ms": 764.66,
+      "queue_drops": 12219,
+      "interface_errors": 409
+    }
+  },
+  {
+    "timestamp": "2026-11-01T01:18:34.242351Z",
+    "device_id": "SW_CAMPUS_3",
+    "metrics": {
+      "cpu_utilization_pct": 57.46,
+      "link_utilization_pct": 40.89,
+      "packet_loss_pct": 12.39,
+      "latency_ms": 237.87,
+      "jitter_ms": 46.84,
+      "interface_errors": 55
+    }
+  },
+  {
+    "timestamp": "2026-11-01T01:18:34.242361Z",
+    "device_id": "SW_CAMPUS_7",
+    "metrics": {
+      "cpu_utilization_pct": 78.98,
+      "link_utilization_pct": 94.51,
+      "packet_loss_pct": 2.95,
+      "latency_ms": 230.89,
+      "jitter_ms": 30.17,
+      "queue_drops": 322
+    }
+  },
+  {
+    "timestamp": "2026-11-01T01:18:34.242370Z",
+    "device_id": "HOSTEL_AP_3",
+    "metrics": {
+      "rssi_dbm": -78,
+      "snr_db": 12,
+      "retransmissions_pct": 53,
+      "channel_utilization_pct": 90
+    }
+  }
+]
+
 Run the hackathon's synthetic telemetry generator, export an individual observation as a JSON object and pass it to `--file`. For example, if Colab exposes a pandas DataFrame named `df`:
 
 ```python
