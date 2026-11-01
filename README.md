@@ -1,357 +1,491 @@
-# NetCoop AI — Multi-Agent Network Fault Diagnosis
+# NetCoop AI — Campus Network Intelligence
 
-Runnable five-role network diagnosis system built with LangGraph, LangChain and Pydantic v2. Three specialist agents run in parallel; the correlation agent resolves cross-agent evidence; the reporting agent emits structured JSON and a Markdown incident report.
+**Evidence-first multi-agent network fault diagnosis, with an interactive IIT Bhubaneswar campus operations dashboard and optional Google Gemini explanations.**
 
-## Quick start (Python 3.11+)
+**[Live frontend](https://netcoop-ui.onrender.com)** · **[Backend health](https://netcoop-api.onrender.com/api/health)** · **[Frontend technical guide](frontend/README.md)**
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[test]'
-python -m pytest -q
-python main.py --scenario link_congestion
-streamlit run app.py
-```
+> **Prototype status:** Uses manually uploaded synthetic/test network telemetry. It does **not** poll IIT Bhubaneswar routers, detect verified physical cable outages, receive live satellite video, or monitor production campus infrastructure. Campus device assignments are demo mappings. No authentication or tenant isolation is implemented.
 
-On Windows activate with `.venv\Scripts\activate`.
+## Contents
 
-## Six benchmark scenarios
+1. [Problem and solution](#problem-and-solution)
+2. [What the application includes](#what-the-application-includes)
+3. [Five-agent architecture](#five-agent-architecture)
+4. [How telemetry JSON works](#how-telemetry-json-works)
+5. [Run locally](#run-locally)
+6. [REST API reference](#rest-api-reference)
+7. [Gemini configuration and limitations](#gemini-configuration-and-limitations)
+8. [Campus maps and topology](#campus-maps-and-topology)
+9. [Database, privacy and hosting](#database-privacy-and-hosting)
+10. [Testing and 5-minute demo](#testing-and-5-minute-demo)
+11. [Project layout and roadmap](#project-layout-and-roadmap)
 
-`normal_operation`, `link_congestion`, `weak_wifi_signal`, `interface_fault`, `dhcp_dns_failure`, `malformed_and_missing_data`.
+## Problem and solution
 
-```bash
-python main.py --scenario interface_fault --output incident.json
-python main.py --file colab_sample.json
-```
+Large networks produce measurements from switches, routers, Wi-Fi access points and services. Operators need to determine whether degraded performance comes from **congestion, packet loss, latency spikes, interface faults, weak Wi-Fi signals, DHCP/DNS problems or device overload**. A dashboard that only says “red” is insufficient: an operator needs observed metrics, competing explanations, confidence/limitations and next steps.
 
-## Colab dataset
+**NetCoop AI** accepts telemetry as JSON, normalizes it, evaluates independent specialist findings, correlates their evidence, produces a structured diagnostic report, and offers guided investigation. The web frontend visualizes saved observations, inventory, incident history and manually mapped campus reference locations.
 
-Here are some test cases if you see 0 in the dashsboard Please go to upload Tab https://netcoop-ui.onrender.com/import and paste these test cases and run 
+### Implemented vs. not implemented
 
+| Capability | Current behavior |
+| --- | --- |
+| Five-role LangGraph diagnostic workflow | Implemented |
+| Parallel Performance, Infrastructure and Connectivity analysis | Implemented |
+| Root-cause correlation, bounded arbitration, structured report | Implemented |
+| Optional Gemini specialist reviews, advisory second opinion and report review | Implemented; dependent on API access, quota and structured-output support |
+| JSON single diagnosis and batch import | Implemented |
+| Device inventory, incident command, evidence, timeline, history and trends | Implemented using saved observations |
+| IIT Bhubaneswar 2D and tilted 3D map | Implemented using geographical reference points and OSM building footprints where mapped |
+| Satellite basemap | Optional; requires an appropriate configured imagery provider |
+| Physical router polling, real-time outage detection, verified fiber paths | **Not implemented** |
+| Login, user isolation, persistent free-tier cloud SQLite | **Not implemented** |
+
+## What the application includes
+
+The **Next.js operations frontend** provides:
+
+- **Command Center** — observed device count, latest healthy/diagnosed/review conditions, incident overview and embedded campus map.
+- **Satellite Campus** — interactive reference regions and device inspection, with optional licensed satellite basemap.
+- **3D Campus** — MapLibre tilted view with available OpenStreetMap footprints, labeled buildings, status markers, timeline playback and demo device-region assignments.
+- **Device Inventory** — last saved observation per device, health/fault status and detail pages.
+- **Incident Command / Agent Collaboration / Fault Courtroom** — evidence, diagnostic decisions, multi-agent messages and explanations.
+- **Events & History** — stored observations, chronological review, per-device history and historical campus playback.
+- **Network Experience / Adaptive Investigation** — operator-driven suggested checks and measured-value entry; missing measurements are not silently treated as zero.
+- **Upload JSON / Diagnose / Technical Records / Configure** — ingestion, single diagnosis, trace inspection and technical details.
+
+The repository also retains its **original Streamlit operator application** (app.py) and command-line runner (main.py). The Next.js frontend does not replace or modify those entry points.
+
+## Five-agent architecture
+
+~~~text
+JSON observation / operator measurements
+                |
+     Normalize & validate keys, units, missing fields
+                |
+     LangGraph parallel specialist fan-out
+        /              |               \
+Performance Agent  Infrastructure    Connectivity Agent
+ latency, loss,    Agent             RSSI, SNR, DHCP,
+ jitter, queues    interface/CPU     DNS, network access
+        \              |               /
+        Structured ACP agent findings (Pydantic)
+                         |
+                 Correlation Agent
+      compare evidence, select supported cause,
+          optional bounded conflict arbitration
+                         |
+                  Reporting Agent
+       canonical report + supported actions
+                         |
+        FastAPI / SQLite / dashboard / history
+~~~
+
+**Role details:**
+
+1. **Performance Agent** evaluates utilization, round-trip latency, jitter, packet loss and queue drops.
+2. **Infrastructure Agent** analyzes evidence such as CPU utilization, memory and interface/CRC errors when supplied.
+3. **Connectivity Agent** examines wireless RSSI/SNR, retransmissions and DHCP/DNS indicators where available.
+4. **Correlation Agent** compares hypotheses with measurement-specific evidence, resolves conflicts and can abstain where evidence is insufficient.
+5. **Reporting Agent** creates the final structured diagnosis, evidence list, limitations and recommended actions.
+
+Three specialists run in parallel; the graph joins their results before correlation. Inter-agent messages use validated Pydantic-based ACP-style envelopes. The root cause is **deterministic and evidence-grounded**: Gemini is an **optional advisory reviewer**, never the final authority.
+
+**Result statuses:** diagnosed (supported fault), healthy (sufficient device-appropriate normal measurements), or inconclusive (missing/conflicting/insufficient evidence). The numeric confidence field describes **evidence support**, *not* an empirically calibrated probability of correctness.
+
+## How telemetry JSON works
+
+### A. Single diagnosis: minimal realistic example
+
+Paste this **JSON object** in the Diagnose page, or send it under the telemetry key in the REST request below:
+
+~~~json
+{
+  "timestamp": "2026-11-01T02:00:18Z",
+  "device_id": "SW_CAMPUS_1",
+  "site": "Demo Campus",
+  "parent_id": "CORE_SWITCH_01",
+  "metrics": {
+    "cpu_utilization_pct": 61.71,
+    "link_utilization_pct": 60.32,
+    "packet_loss_pct": 1.2,
+    "latency_ms": 204.07,
+    "jitter_ms": 70.75,
+    "queue_drops": 4
+  },
+  "status": "Warning"
+}
+~~~
+
+- timestamp is an ISO-8601 observation time; batch import requires a timezone-aware timestamp.
+- device_id identifies a logical monitored device; site and parent_id are supplied metadata, **not verified GIS/cable coordinates**.
+- metrics contains observed numerical values. Aliases such as cpu_utilization_pct are normalized to canonical names such as cpu_pct.
+- A top-level status such as Warning is an **untrusted external label**, not proof of a fault.
+- Missing metrics remain missing; an absent value is **not** assumed to equal zero.
+- This latency/jitter example supports a latency-spike diagnosis under the current deterministic rules; specific reports depend on the supplied data.
+
+### B. REST JSON for POST /api/diagnose
+
+~~~json
+{
+  "telemetry": {
+    "timestamp": "2026-11-01T02:00:18Z",
+    "device_id": "SW_CAMPUS_1",
+    "site": "Demo Campus",
+    "parent_id": "CORE_SWITCH_01",
+    "metrics": {
+      "cpu_utilization_pct": 61.71,
+      "link_utilization_pct": 60.32,
+      "packet_loss_pct": 1.2,
+      "latency_ms": 204.07,
+      "jitter_ms": 70.75,
+      "queue_drops": 4
+    }
+  },
+  "save": true,
+  "include_trace": true
+}
+~~~
+
+Example PowerShell request (locally running backend):
+
+~~~powershell
+$body = Get-Content .\single-diagnosis.json -Raw
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/diagnose -ContentType application/json -Body $body
+~~~
+
+Save the **wrapped** JSON from section B as single-diagnosis.json. Use save=false to avoid saving an incident; include_trace=true returns agent messages, optional agent_reviews, correlation detail, and optional report_review.
+
+### C. Example response (illustrative, shortened)
+
+~~~json
+{
+  "record_id": 1,
+  "incident_id": "INC-EXAMPLE",
+  "report": {
+    "incident_id": "INC-EXAMPLE",
+    "status": "diagnosed",
+    "suspected_root_cause": "latency_spike",
+    "confidence": 0.7136,
+    "affected_devices": ["SW_CAMPUS_1"],
+    "supporting_evidence": [
+      {"metric": "latency_ms", "value": 204.07, "interpretation": "Round-trip time exceeds 150 ms"},
+      {"metric": "jitter_ms", "value": 70.75, "interpretation": "Elevated latency variation"}
+    ],
+    "alternative_causes": [],
+    "recommended_actions": [
+      "Compare latency and jitter across the path",
+      "Check congestion, queueing, and upstream latency",
+      "Capture repeat measurements to determine whether the spike persists"
+    ],
+    "evidence_sources": ["performance_agent"],
+    "limitations": []
+  },
+  "normalized_telemetry": {
+    "device_id": "SW_CAMPUS_1",
+    "latency_ms": 204.07,
+    "jitter_ms": 70.75
+  },
+  "warnings": [],
+  "agent_messages": [],
+  "agent_reviews": [],
+  "correlation": {},
+  "report_review": null
+}
+~~~
+
+**Important:** This is a condensed illustration, not a literal full response. The actual normalized_telemetry contains more keys (many null); agent_messages and correlation contain structured details when include_trace=true; real warnings/reviews and scores can differ. record_id is null if save=false. Gemini explanatory output, when available, is advisory and is returned separately or referenced in report limitations.
+
+### D. Batch import JSON
+
+The **Upload JSON** page accepts a JSON array of observation objects. Example:
+
+~~~json
 [
   {
-    "timestamp": "2026-11-01T01:18:34.242285Z",
-    "device_id": "SW_CAMPUS_4",
+    "timestamp": "2026-11-01T03:00:00Z",
+    "device_id": "SW_DEMO_HEALTHY",
     "metrics": {
-      "cpu_utilization_pct": 19.15,
-      "link_utilization_pct": 23.07,
-      "packet_loss_pct": 0.0,
-      "latency_ms": 10.05,
-      "jitter_ms": 2.0,
+      "link_utilization_pct": 20,
+      "latency_ms": 12,
+      "packet_loss_pct": 0,
       "queue_drops": 0
     }
   },
   {
-    "timestamp": "2026-11-01T01:18:34.242325Z",
-    "device_id": "SW_CAMPUS_7",
+    "timestamp": "2026-11-01T03:01:00Z",
+    "device_id": "AP_DEMO_WEAK",
     "metrics": {
-      "cpu_utilization_pct": 47.07,
-      "link_utilization_pct": 62.32,
-      "packet_loss_pct": 1.07,
-      "latency_ms": 367.66,
-      "jitter_ms": 40.21,
-      "queue_drops": 47
+      "rssi_dbm": -82,
+      "snr_db": 9,
+      "retransmissions_pct": 42
     }
   },
   {
-    "timestamp": "2026-11-01T01:18:34.242340Z",
-    "device_id": "SW_CAMPUS_5",
+    "timestamp": "2026-11-01T03:02:00Z",
+    "device_id": "SW_DEMO_CONGESTED",
     "metrics": {
-      "cpu_utilization_pct": 99.9,
-      "link_utilization_pct": 100.0,
-      "packet_loss_pct": 25.92,
-      "latency_ms": 764.66,
-      "queue_drops": 12219,
-      "interface_errors": 409
-    }
-  },
-  {
-    "timestamp": "2026-11-01T01:18:34.242351Z",
-    "device_id": "SW_CAMPUS_3",
-    "metrics": {
-      "cpu_utilization_pct": 57.46,
-      "link_utilization_pct": 40.89,
-      "packet_loss_pct": 12.39,
-      "latency_ms": 237.87,
-      "jitter_ms": 46.84,
-      "interface_errors": 55
-    }
-  },
-  {
-    "timestamp": "2026-11-01T01:18:34.242361Z",
-    "device_id": "SW_CAMPUS_7",
-    "metrics": {
-      "cpu_utilization_pct": 78.98,
-      "link_utilization_pct": 94.51,
-      "packet_loss_pct": 2.95,
-      "latency_ms": 230.89,
-      "jitter_ms": 30.17,
-      "queue_drops": 322
-    }
-  },
-  {
-    "timestamp": "2026-11-01T01:18:34.242370Z",
-    "device_id": "HOSTEL_AP_3",
-    "metrics": {
-      "rssi_dbm": -78,
-      "snr_db": 12,
-      "retransmissions_pct": 53,
-      "channel_utilization_pct": 90
+      "link_utilization_pct": 95,
+      "latency_ms": 260,
+      "packet_loss_pct": 11,
+      "queue_drops": 180
     }
   }
 ]
+~~~
 
-Run the hackathon's synthetic telemetry generator, export an individual observation as a JSON object and pass it to `--file`. For example, if Colab exposes a pandas DataFrame named `df`:
+For the REST API the same observations must be **wrapped**:
 
-```python
-import json
-from google.colab import files
-row = df.iloc[0].where(df.iloc[0].notna(), None).to_dict()
-with open("colab_sample.json", "w") as f:
-    json.dump(row, f, default=str, indent=2)
-files.download("colab_sample.json")
-```
-
-Check the actual notebook column names before use; the notebook contents were not accessible for schema verification. The normalizer accepts aliases for latency, utilization, queue drops, CPU, Wi-Fi, DNS and DHCP data. It converts units and reports missing fields.
-
-## Architecture
-
-```text
-Telemetry JSON
-    |
-Normalize + validate
-    |
-    +--> Performance Agent ---+
-    +--> Infrastructure Agent +--> Correlation Agent --> [Arbitration when necessary] --> Reporting Agent
-    +--> Connectivity Agent --+
-```
-
-The protocol `src/protocol/models.py` defines immutable ACP v1.2.0 Pydantic messages, agent findings and report schemas. LangGraph controls the barrier join and optional bounded arbitration. No agent should claim an exact root cause from insufficient telemetry.
-
-### Topology
-
-Supply `topology: {"nodes":[{"id":"AP1","parent_id":"SW1","role":"ap","site":"Hostel"},...]}` plus `affected_device_ids` to evaluate a shared ancestor and blast radius. Unknown nodes and cycles produce warnings.
-
-### Confidence
-
-The report's `confidence` is an evidence support score, not a calibrated probability. For empirical calibration, fit `src/utils/calibration.fit_bins` using **independently labeled incidents**, serialize the resulting model as JSON, and set `NETCOOP_CALIBRATION_FILE`. The system abstains from returning a calibrated probability when a bin contains fewer than 20 labels. Synthetic fixture labels do not establish real-world calibration.
-
-### Optional LLM second opinion
-
-```bash
-python -m pip install -e '.[test,llm-gemini]'
-export GEMINI_API_KEY="your-key"
-export NETCOOP_LLM_MODEL="gemini-2.5-flash"
-```
-
-An LLM is advisory: it can provide structured alternatives and explanations during arbitration/inconclusive cases, but cannot override deterministic findings. No API key is needed for the rule-based workflow.
-
-## Acceptance and limitations
-
-- Five functional diagnostic roles; three concurrent specialist agents.
-- Cross-agent structured evidence, confidence scoring and conflict resolution.
-- Malformed input handling and reproducible fixtures.
-- Streamlit UI with downloadable JSON and post-mortem.
-- Automatic tests using `pytest` and GitHub Actions.
-
-**Not yet production-validated:** Real telemetry counter rates, empirical confidence calibration, LLM provider behavior, and security of ingestion pipelines require more work. No production campus configuration is modified. This implementation is a hackathon prototype.
-
-## Demo (3–5 minutes)
-
-1. Run link congestion to show utilization, queue drops and latency agreement.
-2. Run interface fault to show CRC evidence winning over latency-only suspicion.
-3. Run malformed input to expose normalization warnings.
-4. Show agent messages, arbitration path and final JSON in Streamlit.
-
-## Organizer Colab JSON (nested or flat)
-
-The application accepts the original Colab shape directly, without a manual conversion step:
-
-```json
+~~~json
 {
-  "timestamp": "2026-10-31T16:21:56.896760Z",
-  "device_id": "SW_CAMPUS_8",
-  "metrics": {
-    "cpu_utilization_pct": 99.9,
-    "link_utilization_pct": 100.0,
-    "packet_loss_pct": 16.4,
-    "latency_ms": 635.46,
-    "queue_drops": 10730,
-    "interface_errors": 160
-  },
-  "status": "Critical"
+  "records": [
+    {"timestamp": "2026-11-01T03:00:00Z", "device_id": "SW_DEMO_HEALTHY", "metrics": {"link_utilization_pct": 20, "latency_ms": 12, "packet_loss_pct": 0, "queue_drops": 0}},
+    {"timestamp": "2026-11-01T03:01:00Z", "device_id": "AP_DEMO_WEAK", "metrics": {"rssi_dbm": -82, "snr_db": 9, "retransmissions_pct": 42}}
+  ]
 }
-```
+~~~
 
-Save the object to `network_telemetry.json`, then run:
+Call POST /api/telemetry/import with Content-Type: application/json. The backend validates that each record has a device ID and timestamp, processes up to **500 records** per request, persists successful diagnoses, and returns count plus per-record results or errors. The endpoint can invoke Gemini once or several times *per record* depending on configuration: large batch uploads can exhaust provider quotas.
 
-```bash
-python main.py --file data/colab_original_nested.json
-python main.py --file data/colab_sample.json
-python -m pytest tests/test_colab_input.py -v
-```
+### E. How the analysis is generated
 
-For Colab's generated Python variable `telemetry`, export without retyping values:
+1. The API accepts telemetry, extracts top-level and nested metrics, resolves recognized aliases and units, and records warnings for missing or invalid fields.
+2. The specialist agents independently inspect **only provided evidence** and produce findings via Pydantic message schemas.
+3. Correlation selects a supportable cause, performs bounded arbitration where needed, or returns healthy/inconclusive when appropriate.
+4. Reporting produces a canonical JSON report and next investigative steps.
+5. If configured, Gemini generates separate constrained reviews/second opinions. A Gemini failure (rate limit, unavailable model, parsing error) **does not discard the deterministic result**.
+6. With save=true or a batch import, the API writes an incident and agent messages to SQLite; other pages read the saved records.
 
-```python
-import json
-from google.colab import files
-with open("network_telemetry.json", "w", encoding="utf-8") as f:
-    json.dump(telemetry, f, indent=2, default=str)
-files.download("network_telemetry.json")
-```
+### Input schema and normalization notes
 
-If the notebook uses another variable name, replace `telemetry` with that variable. The top-level values override nested measurements with the same key, and generic `interface_errors` are **not** automatically classified as CRC faults. Input `status` is treated as an external label rather than diagnostic evidence.
+Recognized metrics include link_utilization_pct, queue_drops, latency_ms, jitter_ms, packet_loss_pct, throughput_mbps, cpu_pct (alias cpu_utilization_pct), memory_pct, crc_errors, rssi_dbm, snr_db, retransmissions_pct, dns_latency_ms, dhcp_timeout_pct and gateway_ping_ms. Certain nested values and friendly aliases are accepted. Special metadata includes timestamp, device_id, site, parent_id and optional topology information.
 
-## Batch telemetry diagnosis
+A generic interface_errors measurement is **not** automatically equivalent to crc_errors. The system does not infer or manufacture missing hardware measurements.
 
-Batch CLI accepts a JSON array, an object containing a `records` array, CSV, or JSON Lines. Each record is processed by the original five-role LangGraph workflow. Individual input errors are recorded without discarding other results.
+**Built-in scenarios:** normal_operation, link_congestion, weak_wifi_signal, interface_fault, dhcp_dns_failure, malformed_and_missing_data. Retrieve examples with GET /api/scenarios or run them via the CLI.
 
-```bash
-python main.py --batch data/colab_batch.json --output reports/batch_results.json
-python -m pytest tests/test_batch.py -v
-```
+## Run locally
 
-The output contains summary counts, per-incident reports, validation warnings, and agent message histories. Use `--db data/netcoop.db` to persist runs to SQLite. The sample batch is an illustrative set of three cases rather than a collection exported from your Colab notebook.
+Requirements: Python **3.11+** (Render is configured for **3.12.11**), Node.js/npm for the web frontend, and an optional Google Gemini API key. SQLite is created locally.
 
-## SQLite persistence and incident history
+### Windows PowerShell
 
-NetCoop AI stores completed workflow runs without changing the five-agent LangGraph architecture. The local SQLite database is initialized automatically when persistence is enabled.
+~~~powershell
+git clone https://github.com/himani046/NetCoop-AI-.git
+cd NetCoop-AI-
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[api,test,llm-gemini]"
+python -m pytest -q
+uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+~~~
 
-```bash
-python -m pip install -e '.[test]'
-python main.py --batch data/colab_batch.json --db data/netcoop.db --output reports/latest.json
-python main.py --history --db data/netcoop.db
-python main.py --show-incident 1 --db data/netcoop.db
-python -m pytest tests/test_database.py -v
-streamlit run app.py
-```
+In another PowerShell terminal:
 
-The dashboard supports saving diagnoses and browsing stored reports with agent-message history. Each execution has a unique internal database ID, even if external incident IDs repeat. Files ending in `.db` are intentionally excluded from Git. See `src/database/README.md` for the schema and limitations. SQLite is a local demonstration store, not an operational campus network monitoring service.
+~~~powershell
+cd NetCoop-AI-\frontend
+npm install
+Copy-Item .env.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:8000 in .env.local
+npm run dev
+~~~
 
-## Evidence-grounded AI advisory review (optional)
+Open http://localhost:3000 and http://localhost:8000/api/health.
 
-Install the provider integration and set an API key locally. The core five-agent system and all tests continue to work without a key.
+### macOS / Linux
 
-```bash
-python -m pip install -e '.[test,llm-gemini]'
-export GEMINI_API_KEY="YOUR_KEY_FROM_PROVIDER"
-export NETCOOP_LLM_MODEL="gemini-2.5-flash"
+~~~bash
+git clone https://github.com/himani046/NetCoop-AI-.git
+cd NetCoop-AI-
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[api,test,llm-gemini]'
+uvicorn api.main:app --reload --port 8000
+# In another shell:
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+~~~
+
+Other entry points:
+
+~~~bash
 python main.py --scenario link_congestion
+python main.py --scenario interface_fault --output incident.json
+python main.py --batch data/colab_batch.json --db data/netcoop.db --output reports/batch.json
 streamlit run app.py
-```
+~~~
 
-Do not commit credentials. AI reviews are advisory Pydantic-validated structured outputs with suggested cause, explanation, alternative causes, an uncertainty flag and referenced metric names. Reviews cannot override the deterministic diagnosis or its evidence-support score. Invalid or unavailable API responses gracefully fall back to the normal result. The required final JSON retains its original hackathon schema; the review appears separately in the LangGraph diagnostic state, arbitration notes and Streamlit dashboard.
+## REST API reference
 
-With the model configured, a review runs after correlation for ordinary cases and after bounded arbitration for conflicting cases. Without configuration, diagnostics remain offline and deterministic. Mocked tests in `tests/test_ai_reasoning.py` exercise success, disagreement and failure without contacting a provider.
+FastAPI serves JSON at http://localhost:8000 (locally), with interactive documentation at /docs.
 
-**Caution:** The mock tests do not prove a live API model integration. Verify provider credentials, model availability, latency and billing before the demonstration.
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | /api/health | Health and source/mode |
+| GET | /api/scenarios | Example diagnostic observations |
+| POST | /api/diagnose | Run one diagnosis; save and trace optional |
+| POST | /api/telemetry/import | Batch process up to 500 timestamped observations |
+| GET | /api/overview/summary | Dashboard counts |
+| GET | /api/devices/latest | Latest saved record for each device |
+| GET | /api/devices/{device_id} | Device detail and measurements |
+| GET | /api/devices/{device_id}/history | Device observation timeline |
+| GET | /api/devices/{device_id}/trends | Historical metric trends |
+| GET | /api/incidents | Saved incident list |
+| GET | /api/incidents/{record_id} | Full saved incident |
+| GET | /api/incidents/{record_id}/messages | ACP agent messages |
+| GET | /api/incidents/{record_id}/investigation | Investigative narrative |
+| GET | /api/incidents/{record_id}/evidence | Evidence details |
+| GET | /api/intelligence/incidents | Incident intelligence summary |
+| GET | /api/playback/events | Chronological saved events |
+| GET | /api/map/regions | Reference regions, statuses and assignments |
+| GET | /api/map/history | Historical map frames |
+| POST | /api/map/assign | Manually place/unplace a test device in a reference region |
 
-## Offline diagnostic benchmark (no API key)
+**Example demo assignment body:** {"device_id":"SW_CAMPUS_1","region_id":null} removes an assignment. To assign a region, first retrieve its exact ID from GET /api/map/regions. These assignments reflect **demo placement**, not discovered real device coordinates.
 
-```bash
-python benchmark.py --per-class 20 --seed 42 --output reports/benchmark.json
-python -m pytest tests/test_benchmark.py -v
-```
+## Gemini configuration and limitations
 
-The script creates 120 seeded synthetic evaluations: 20 instances each of normal operation, link congestion, weak Wi-Fi, physical interface fault, DHCP fault and deliberately insufficient telemetry. It executes the existing five-agent LangGraph diagnosis without activating the optional LLM. It reports overall accuracy, macro F1, per-class precision/recall/F1, a confusion matrix, abstention rate, average and approximate p95 latency, and individual failure cases. The JSON report is reusable by demos or dashboards.
+Gemini integration is optional. The Python package is installed by the Render Blueprint via pip install -e ".[api,llm-gemini]". To enable locally, create a root .env based on the **root .env.example**:
 
-**Interpretation:** Labels are assigned by the generator from known fault templates with small noise; this measures reproducibility and performance *on synthetic fixtures*, not verified performance on independently labeled real campus incidents. An inconclusive result on a known normal record is scored as normal only if the specialist agents raise no fault hypotheses; this is a benchmark scoring convention. Run results are not predetermined and should never be advertised before executing the benchmark.
-
-## Private API key setup via .env
-
-The repo contains a safe `.env.example` template. Your real `.env` is already Git-ignored; **never push credentials**.
-
-In Windows PowerShell, run from the cloned project folder:
-
-```powershell
-Copy-Item .env.example .env
-notepad .env
-python -m pip install -e ".[test,llm-gemini]"
-python -m streamlit run app.py
-```
-
-Replace `replace_with_your_gemini_api_key` with your own key inside the local `.env`. The app loads it automatically through `python-dotenv`. Environment variables you set explicitly in the terminal take precedence. Do not use `git add -f .env`.
-
-To confirm Git excludes the key file, run `git check-ignore .env`. It should print `.env`.
-
-## Gemini-powered five-role workflow
-
-**Provider:** Google Gemini Developer API via `langchain-google-genai`. Obtain a key from https://aistudio.google.com/apikey .
-
-```powershell
-git pull origin main
-python -m pip install -e ".[test,llm-gemini]"
-Copy-Item .env.example .env
-notepad .env
-python -m pytest -v
-python -m streamlit run app.py
-```
-
-In your **local** `.env` file, configure:
-
-```dotenv
-GEMINI_API_KEY=your_private_google_ai_studio_key
-NETCOOP_LLM_MODEL=gemini-2.5-flash
+~~~dotenv
+GEMINI_API_KEY=YOUR_PRIVATE_KEY
+NETCOOP_LLM_MODEL=gemini-3.5-flash-lite
 NETCOOP_GEMINI_AGENT_REVIEWS=1
-```
+NETCOOP_GEMINI_TIMEOUT_SECONDS=20
+~~~
 
-The Performance, Infrastructure, and Connectivity agents run their established deterministic specialist analysis and optionally request **separate Gemini reviews**. Correlation requests a structured Gemini second opinion, and Reporting requests a Gemini operator summary. Gemini explanations never replace validated ACP findings, the deterministic root cause, evidence, confidence or canonical JSON. The UI presents the advisory reviews independently. Expect up to **five Gemini requests per incident**, which may consume quota and incur charges.
+This model value is an example previously used in testing; use an exact currently available model ID for your Google project. **Do not commit .env, paste a secret into a frontend NEXT_PUBLIC_ variable, or store it in an uploaded JSON file.**
 
-To reduce calls, set `NETCOOP_GEMINI_AGENT_REVIEWS=0` to skip specialist and reporting reviews; Correlation will still use Gemini. To run completely offline, leave `NETCOOP_LLM_MODEL` empty. The included benchmark forcibly disables Gemini, so measurements remain reproducible. Google API failures do not prevent the deterministic diagnosis.
+- NETCOOP_LLM_MODEL empty: no Gemini calls; deterministic five-agent workflow still works.
+- NETCOOP_GEMINI_AGENT_REVIEWS=0: skips Gemini specialist and reporting reviews, **but may still call Gemini for a correlation advisory second opinion** if a model is configured.
+- NETCOOP_GEMINI_AGENT_REVIEWS=1: can call Gemini for three specialist reviews, a correlation second opinion, and final-report review—**up to roughly five calls per incident**.
+- Structured-output integration uses explicit native json_schema mode with Pydantic validation. Advisory labels include latency_spike and packet_loss.
+- Missing metrics, invented references, conflicting identities and invalid outputs are rejected or flagged. Gemini **never changes the deterministic final cause**.
+- Provider quotas, 429 rate limits, model availability, and parser errors can affect reviews. Avoid batch Gemini reviews on a low quota. Only a fresh, populated agent_reviews / report_review or advisory second-opinion response proves the relevant AI path worked.
 
-**Before updating your existing local environment:** If you already created `.env` for OpenAI, edit that file manually, delete the OpenAI settings and add the Gemini settings above. `Copy-Item` must not overwrite a file containing secrets without checking it. Never commit `.env`; `git check-ignore .env` should confirm exclusion.
+For a cost-controlled demonstration, disable Gemini during large imports and run a single selected diagnosis with Gemini enabled. The public API currently has no user authentication or rate-limiting: do **not** expose a billable key on an unprotected production endpoint without adding safeguards.
 
-```powershell
+## Campus maps and topology
+
+**2D Satellite Campus** and **3D Campus** use MapLibre GL JS. The 3D view fetches mapped OSM building footprints via Overpass, extrudes polygons using recorded or estimated heights, displays available building names, and restricts navigation to an approximate IIT Bhubaneswar vicinity.
+
+Device-region associations are manually selected from existing backend reference locations. A red region marker means an assigned device has a **saved diagnosed fault**; yellow signals review/limited evidence; green means an observed healthy condition; gray denotes unmonitored/unassigned. Markers are **not verified outage polygons**.
+
+Where a saved device has a parent_id and both devices have assigned reference regions, the UI draws a logical connection. Red indicates a diagnosed endpoint fault, **not proven propagation** to every downstream building or the path of buried fiber.
+
+**Satellite imagery is optional** and is not continuously live. The default no-credentials fallback is an OpenStreetMap street basemap. Configure one of these frontend settings in frontend/.env.local or the Render static-site environment:
+
+~~~dotenv
+NEXT_PUBLIC_API_URL=http://localhost:8000
+# Optional Sentinel Hub WMS configuration (public browser-side instance ID)
+NEXT_PUBLIC_SENTINEL_INSTANCE_ID=
+NEXT_PUBLIC_SENTINEL_LAYER=NATURAL-COLOR
+NEXT_PUBLIC_SENTINEL_WMS_BASE=copernicus
+NEXT_PUBLIC_SENTINEL_TIME=
+# OR an authorized MapTiler browser key / licensed MapLibre style
+NEXT_PUBLIC_MAPTILER_KEY=
+NEXT_PUBLIC_SATELLITE_STYLE_URL=
+~~~
+
+Sentinel-2 imagery is periodically acquired and typically too low-resolution for the crisp individual-building aerial photograph seen in some mockups. A provider license, suitable imagery resolution and API configuration are required for higher-resolution satellite/aerial imagery. **No satellite API can reveal router health without network telemetry.**
+
+## Database, privacy and hosting
+
+### Storage
+
+The app uses **SQLAlchemy + SQLite** for saved incidents, messages and demo region assignments. Local default is data/netcoop.db, which persists as long as the file is retained.
+
+The included root render.yaml defines:
+
+- **netcoop-api**: FastAPI Python service, builds with Gemini extra, runs Uvicorn, uses Python 3.12.11.
+- **netcoop-ui**: Next.js static export from frontend/out, with NEXT_PUBLIC_API_URL pointing to the API.
+- **NETCOOP_DB_PATH=/tmp/netcoop.db** on the Render free backend.
+
+**Render free-instance filesystem storage is ephemeral.** Database content can vanish when the backend spins down, restarts or redeploys. A successful re-upload can be lost later. This is **not age-based retention of individual incidents**. For reliable persistence, migrate to an external persistent database with appropriate backend support or use a persistent disk on a suitable paid service.
+
+### Privacy and multi-user behavior
+
+**There is no login, tenant_id, per-user ownership filtering, or authenticated authorization.** All visitors to the same API share the same saved database. One visitor's stored diagnoses can appear in another visitor's dashboard, inventory or incident history. **Do not upload confidential or actual campus operational telemetry to the public demo.** CORS is not an authentication mechanism.
+
+The root code currently exposes unauthenticated diagnosis, telemetry import and demo mapping assignment. Add authentication, per-user ownership enforcement, rate limits, secure ingestion and durable hosting before real-world use.
+
+### Render environment variables
+
+Backend netcoop-api:
+
+~~~dotenv
+PYTHON_VERSION=3.12.11
+NETCOOP_DB_PATH=/tmp/netcoop.db
+NETCOOP_CORS_ORIGINS=https://netcoop-ui.onrender.com
+GEMINI_API_KEY=YOUR_SECRET_IN_RENDER_ONLY
+NETCOOP_LLM_MODEL=
+NETCOOP_GEMINI_AGENT_REVIEWS=0
+NETCOOP_GEMINI_TIMEOUT_SECONDS=20
+~~~
+
+The model is intentionally blank and agent reviews off in this safe example. Set the model explicitly **only when you intend Gemini usage**. Frontend netcoop-ui:
+
+~~~dotenv
+NEXT_PUBLIC_API_URL=https://netcoop-api.onrender.com
+# Optional imagery settings from the preceding section
+~~~
+
+Actual service URLs may differ. Render Blueprint may apply its own configured defaults; confirm the service Environment tab and redeploy after changes. Next.js static environment variables are injected **at build time**, so a new frontend build is needed after editing them.
+
+### Production-readiness gaps
+
+This is a functional hackathon prototype, not a secure enterprise monitoring service. No verified campus device polling or authorized production telemetry collector exists. The system has not established independent real-world confidence calibration, durable multi-user storage, authentication, or physical network topology. Dependency audit warnings must be reviewed before production use.
+
+## Testing and 5-minute demo
+
+~~~bash
+python -m pytest -q
 python -m pytest tests/test_gemini_agents.py tests/test_ai_reasoning.py -v
-```
+python benchmark.py --per-class 20 --seed 42 --output reports/benchmark.json
+cd frontend
+npm run lint
+npm run build
+~~~
 
-The tests mock provider calls. They do not establish that a live Gemini API key has sufficient credits or requests per minute. Start the live demo with **one** incident before batch processing.
+Mocked Gemini tests do not consume API quota; they do not prove a live Google project has remaining requests. The benchmark uses seeded synthetic data and reports accuracy, class scores and abstentions **for those synthetic fixtures only**, not independently validated campus performance.
 
-## Healthy outcomes and Gemini review validation
+**Suggested five-minute walkthrough:**
 
-The final report has three explicit statuses: `diagnosed` for evidence-backed faults, `healthy` for complete normal snapshots where all three specialists report healthy, and `inconclusive` for insufficient or unreliable data. Healthy results do **not** imply a network-wide uptime guarantee; they describe only the observed snapshot. The `confidence` field remains the *fault-evidence support score*, so a healthy snapshot has a score of 0.
+| Time | Show | Narration |
+| --- | --- | --- |
+| 0:00–0:35 | Command Center | Campus network troubleshooting problem and project objective |
+| 0:35–1:20 | Agent Collaboration | Three specialists in parallel; Correlation then Reporting; optional Gemini advice |
+| 1:20–2:05 | Upload JSON / Diagnose | Demonstrate a single telemetry record becoming an evidence-based fault report |
+| 2:05–2:50 | Satellite + 3D Campus | Color-coded demo reference regions and mapped building footprints |
+| 2:50–3:35 | Device Inventory + Incidents | Trace source measurements and past observations |
+| 3:35–4:20 | Fault Courtroom + Network Experience | Explain confidence, limitations and operator-suggested measurements |
+| 4:20–5:00 | Architecture + closing | Distinguish implemented prototype from live network monitoring roadmap |
 
-Gemini's alternative hypotheses stay in a separate `decision.ai_review` and cannot enter the canonical incident JSON without deterministic corroboration. Specialist reviews validate metric references and assign their identity from the calling agent; model-supplied conflicting identities and invented metrics are rejected. Validation warnings now include a short reason, without printing a configured API key.
+**Closing:** *NetCoop AI doesn't just flag a network anomaly—it helps operators understand which evidence supports a diagnosis, what remains unknown, and what to investigate next.*
 
-Run targeted regression tests:
+## Project layout and roadmap
 
-```powershell
-git pull origin main
-python -m pytest tests/test_health_and_reviews.py tests/test_scenarios.py tests/test_gemini_agents.py -v
-python -m pytest -v
-python -m streamlit run app.py
-```
+~~~text
+app.py                 Original Streamlit console
+main.py                CLI and batch processing
+api/                   FastAPI routes, campus mapping, history, intelligence
+src/agents/            Performance, Infrastructure, Connectivity, Correlation, Reporting, Gemini reviews
+src/graph/             LangGraph workflow and state
+src/protocol/          Normalization, validation and ACP/Pydantic contracts
+src/database/          SQLAlchemy/SQLite models and incident repository
+src/utils/             Synthetic scenarios, confidence, calibration
+frontend/              Next.js dashboard, MapLibre maps and static export
+tests/                 Python regression and mocked integration tests
+benchmark.py           Seeded synthetic benchmark
+render.yaml            Render backend + static frontend Blueprint
+~~~
 
-## Operator console (Streamlit)
+**Next steps:** authenticated per-user workspaces; persistent database; rate-limited/on-demand Gemini reviews; approved SNMP/syslog/telemetry ingestion; validated topology and device-to-building geolocation; richer campus coverage and licensed high-resolution imagery; stronger operational/security testing.
 
-The interface is now organized into four functional workspaces instead of displaying raw JSON on its primary pages:
+For implementation-specific details, see [frontend/README.md](frontend/README.md) and [src/database/README.md](src/database/README.md).
 
-- **Overview** — latest operator diagnosis, key metrics, evidence, actions and saved incident history.
-- **Run diagnosis** — choose a built-in scenario or paste custom telemetry; run all five agents and review the readable results, including ACP collaboration and optional Gemini explanations.
-- **Campus map** — an interactive geographic basemap of IIT Bhubaneswar's Argul permanent campus, with reference point-of-interest labels. **It does not monitor actual campus network infrastructure.** The user can explicitly map a *simulated incident device* to a known campus location for the demonstration; the selected place then receives a red warning marker when the synthetic diagnosis is `diagnosed`. Locations are not automatically inferred from device names and the demo mapping must not be represented as real network topology or a live alert.
-- **Technical records** — raw final-report JSON, normalized telemetry, ACP envelopes, correlation data, Gemini review objects and saved incident JSON.
+---
 
-Run `python -m streamlit run app.py`. A working internet connection is needed for remote basemap tiles; the diagnosis engine itself operates with synthetic/local telemetry. The map references OpenStreetMap-based campus POI coordinates:
-- IIT Bhubaneswar campus: https://mapcarta.com/W621537202
-- Main Building: https://mapcarta.com/W1302319387
-- Lalitgiri Lecture Hall: https://mapcarta.com/W1302319392
-- Pushpagiri Lecture Hall: https://mapcarta.com/W1302319393
-- Lab Complex: https://mapcarta.com/W1329357338
-- IIT SHSSM: https://mapcarta.com/W1302319395
-
-A true live campus network map requires authorized telemetry sources, audited device-to-location assignments, and validated link topology. The supplied hackathon problem statement explicitly permits synthetic telemetry and does not require production network access.
-
-## Device telemetry import and latest-status inventory
-
-Use **Import telemetry** in the sidebar to paste an individual JSON object, a JSON array of readings, an object with `records` / `telemetry` list, or JSONL, or upload a .json/.jsonl/.txt file. No scenario selection is necessary. An import can contain multiple device IDs and multiple observations for one device. Each record is independently normalized, diagnosed by the five functional agents, and persisted in SQLite with its full original and normalized telemetry, incident report, and agent-message history. Bulk imports default to deterministic offline analysis to prevent excessive Gemini API calls; optional Gemini reviews can be enabled.
-
-For the **Campus map** device inventory, records are grouped by `device_id` and the latest valid **telemetry observation timestamp in UTC** is chosen, not the insertion time or the last processed record. Older uploads do not replace newer measurements. For equal timestamps, the most recently saved record takes precedence. Legacy records missing a parseable timestamp remain in history but are secondary to timestamped observations.
-
-Imports require a nonempty known device ID and a timezone-aware ISO 8601 timestamp. Invalid imports are rejected before processing the batch; run failures during processing are listed per record. This is a test-data device dashboard, not a production campus monitoring feed. Map red/amber/green indicators are based on each mapped device's latest persisted result; building-to-device associations must be manually specified for demonstration, and are not verified network topology.
-
-Run the tests with `python -m pytest tests/test_telemetry_inventory.py -v`.
-
-### Per-device metric inspection on Campus map
-
-Below **Latest telemetry by device ID**, expand **Device metrics & interpretations** for a device to review all 15 supported numeric fields from exactly the same latest-timestamp record used by the inventory. Metrics are grouped by Performance, Infrastructure, and Connectivity, showing observed values, units, and color-coded explanations: green normal, amber approaching a specialist anomaly threshold, red triggering a threshold, and grey missing/not assessed (including throughput where no capacity baseline is available). The amber thresholds are conservative display-only early warnings; red thresholds reflect the corresponding deterministic specialist checks. Missing metrics are never treated as normal. No real campus device status is implied by this synthetic telemetry UI.
+**NetCoop AI is a synthetic/test telemetry demonstration. A red map marker is a saved diagnostic inference, not an independently verified live IIT Bhubaneswar outage.**
