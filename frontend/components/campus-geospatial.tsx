@@ -23,7 +23,7 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog
  const basemap=getCampusBasemap();
  const [ready,setReady]=useState(false);
  useEffect(()=>{recent.current=regions},[regions]);
- useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:basemap.style,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75,maxBounds:campusBounds,minZoom:14.9});
+ useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:basemap.style,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,maxPitch:75,maxBounds:campusBounds,minZoom:14.9});
  map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());connectionLabels.current.forEach(x=>x.remove());buildingLabels.current.forEach(x=>x.remove());markers.current=[];connectionLabels.current=[];buildingLabels.current=[];m.remove();map.current=null}},[]);
  useEffect(()=>{if(!ready||!map.current)return;const m=map.current;let cancelled=false;
  async function load(){try{let raw:OSMResult|null=null;try{const stored=sessionStorage.getItem(cacheKey);if(stored)raw=JSON.parse(stored) as OSMResult}catch{}
