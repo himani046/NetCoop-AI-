@@ -3,15 +3,21 @@ services:
     name: netcoop-api
     runtime: python
     plan: free
-    buildCommand: pip install -e ".[api]"
+    buildCommand: pip install -e ".[api,llm-gemini]"
     startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: NETCOOP_DB_PATH
         value: /tmp/netcoop.db
-      - key: NETCOOP_LLM_MODEL
-        value: ""
       - key: NETCOOP_CORS_ORIGINS
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NETCOOP_LLM_MODEL
+        sync: false
+      - key: NETCOOP_GEMINI_AGENT_REVIEWS
+        value: "0"
+      - key: NETCOOP_GEMINI_TIMEOUT_SECONDS
+        value: "20"
   - type: web
     name: netcoop-ui
     runtime: static
@@ -20,3 +26,9 @@ services:
     envVars:
       - key: NEXT_PUBLIC_API_URL
         sync: false
+      - key: NEXT_PUBLIC_SENTINEL_INSTANCE_ID
+        sync: false
+      - key: NEXT_PUBLIC_SENTINEL_LAYER
+        value: NATURAL-COLOR
+      - key: NEXT_PUBLIC_SENTINEL_WMS_BASE
+        value: copernicus
