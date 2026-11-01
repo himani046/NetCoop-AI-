@@ -17,7 +17,7 @@ export function SatelliteMap({compact=false}:{compact?:boolean}){
  async function refresh(){const [a,b]=await Promise.all([getJSON<Snapshot>("/api/map/regions"),getJSON<Device[]>("/api/devices/latest")]);setSnapshot(a);setDevices(b)}
  useEffect(()=>{refresh().catch(e=>setError(String(e)))},[]);
  useEffect(()=>{if(!container.current||map.current)return;
-  try{map.current=new maplibregl.Map({container:container.current,style:basemap.style,center:[85.674,20.1476],zoom:15.2,attributionControl:true,maxBounds:[[85.666,20.143],[85.683,20.153]],minZoom:14.5});
+  try{map.current=new maplibregl.Map({container:container.current,style:basemap.style,center:[85.674,20.1476],zoom:15.2,attributionControl:{},maxBounds:[[85.666,20.143],[85.683,20.153]],minZoom:14.5});
    map.current.addControl(new maplibregl.NavigationControl(),"top-right");map.current.on("load",()=>setReady(true));
   }catch(e){setError("Map rendering unavailable: "+String(e))}
   return()=>{markers.current.forEach(m=>m.remove());markers.current=[];map.current?.remove();map.current=null};
