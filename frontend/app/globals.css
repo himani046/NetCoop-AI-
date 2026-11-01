@@ -205,3 +205,7 @@ tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
 .geo-alert-glyph,.map-alert-glyph{position:absolute;right:-7px;top:-10px;z-index:3;background:#d94b46;border:2px solid #fff;color:#fff;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;font:800 14px 'IBM Plex Mono',monospace;box-shadow:0 2px 9px #761b1b70;pointer-events:none}
 .geo-link-alert{border-color:#d94b46;color:#af2724;background:#fff5f4f5}
 .map-alert-glyph{right:-9px;top:-11px}
+
+/* Mapbox-style tilt and labeled GIS features without generic dark dashboard styling. */
+.campus-osm-name{display:block;max-width:145px;white-space:normal;text-align:center;cursor:pointer;user-select:none;font:800 10px 'DM Sans',sans-serif;line-height:1.2;text-transform:uppercase;color:#173039;letter-spacing:.35px;text-shadow:-1px -1px #fff,1px 1px #fff,-1px 1px #fff,1px -1px #fff,0 0 5px #fff,0 0 8px #fff}
+.campus-osm-name:hover{color:#315fc0;text-decoration:underline}.campus-geospatial-canvas{touch-action:pan-y}
