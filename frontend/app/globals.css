@@ -120,7 +120,7 @@ button{background:#315fc0;color:#fff;border-radius:7px}input,textarea,select{bac
 .status.diagnosed{color:#d94b46}.status.healthy{color:#29835b}.status{color:#aa7b23}
 .tag{color:#58666e;border-color:#d9dedd;border-radius:7px}.tag:hover{background:#eef1ef}
 tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
-.page-intro{display:flex;align-items:end;justify-content:space-between;gap:15px}
+.page-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:15px}
 .executive-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:26px 0}
 .command-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(270px,.8fr);gap:15px}
 .command-grid .panel{margin:0}.command-map{overflow:hidden}.command-map .section-header{margin:0 0 16px}
