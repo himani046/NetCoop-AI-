@@ -16,7 +16,7 @@ function toGeoJSON(input:OSMResult){const features:Footprint[]=[];for(const e of
  const levels=Number(e.tags["building:levels"]||2);features.push({type:"Feature",id:"way/"+e.id,properties:{name:e.tags.name||"Unnamed mapped building",level:Number.isFinite(levels)?Math.min(12,Math.max(1,levels)):2,osm_id:e.id},geometry:{type:"Polygon",coordinates:[coordinates]}})}
  return {type:"FeatureCollection" as const,features};}
 const api="https://overpass.kumi.systems/api/interpreter";
-export function CampusGeospatial({regions,selected,onSelect,onBuilding,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
+export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;onCatalog?:(names:string[])=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
  const holder=useRef<HTMLDivElement>(null),map=useRef<GLMap|null>(null),markers=useRef<Marker[]>([]),recent=useRef(regions);
  const [count,setCount]=useState<number|null>(null),[warning,setWarning]=useState(""),[loading,setLoading]=useState(true);
  const satelliteStyle=process.env.NEXT_PUBLIC_SATELLITE_STYLE_URL;
@@ -27,7 +27,7 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,devices=[
  useEffect(()=>{if(!ready||!map.current)return;const m=map.current;let cancelled=false;
  async function load(){try{let raw:OSMResult|null=null;try{const stored=sessionStorage.getItem(cacheKey);if(stored)raw=JSON.parse(stored) as OSMResult}catch{}
  if(!raw){const q='[out:json][timeout:25];way["building"](20.143,85.666,20.153,85.683);out geom;';const response=await fetch(api+"?data="+encodeURIComponent(q),{signal:AbortSignal.timeout(29000)});if(!response.ok)throw Error("OSM footprints temporarily unavailable");raw=await response.json() as OSMResult;try{sessionStorage.setItem(cacheKey,JSON.stringify(raw))}catch{}}
- if(cancelled)return;const shapes=toGeoJSON(raw);setCount(shapes.features.length);
+ if(cancelled)return;const shapes=toGeoJSON(raw);setCount(shapes.features.length);onCatalog?.([...new Set(shapes.features.map(f=>f.properties.name).filter(n=>n!=="Unnamed mapped building"))].sort());
  if(!m.getSource("campus-buildings"))m.addSource("campus-buildings",{type:"geojson",data:shapes});
  if(!m.getLayer("campus-buildings-3d"))m.addLayer({id:"campus-buildings-3d",type:"fill-extrusion",source:"campus-buildings",paint:{"fill-extrusion-color":"#aab5af","fill-extrusion-height":["*",["get","level"],3.2],"fill-extrusion-base":0,"fill-extrusion-opacity":0.81}});
  if(!m.getLayer("campus-building-outline"))m.addLayer({id:"campus-building-outline",type:"line",source:"campus-buildings",paint:{"line-color":"#61727c","line-width":0.8}});
@@ -48,7 +48,7 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,devices=[
  const src=m.getSource("logical-connections") as maplibregl.GeoJSONSource|undefined;
  if(src)src.setData(geojson);else{m.addSource("logical-connections",{type:"geojson",data:geojson});
  m.addLayer({id:"logical-connection-lines",type:"line",source:"logical-connections",paint:{"line-color":"#315fc0","line-width":3,"line-dasharray":[2,1],"line-opacity":.9}});
- m.addLayer({id:"logical-connection-labels",type:"symbol",source:"logical-connections",layout:{"symbol-placement":"line","text-field":["get","label"],"text-size":11,"text-font":["Open Sans Regular","Arial Unicode MS Regular"]},paint:{"text-color":"#183e7a","text-halo-color":"#ffffff","text-halo-width":2}})}
+}
  },[ready,devices,assignments,regions]);
  useEffect(()=>{if(!ready||!map.current)return;markers.current.forEach(x=>x.remove());markers.current=[];
  for(const r of regions){const el=document.createElement("button");el.type="button";el.className="geo-3d-marker "+r.status+(selected===r.id?" selected":"");el.style.setProperty("--status-color",palette[r.status]);el.setAttribute("aria-label",r.name+"; "+r.status+"; "+r.devices.length+" devices");el.innerHTML='<span class="geo-3d-halo"></span><span class="geo-3d-pin"></span>';
