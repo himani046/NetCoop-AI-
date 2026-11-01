@@ -108,3 +108,20 @@ The provided Mapbox GL JS example uses `mapbox://` proprietary vector sources an
 Saved `parent_id` metadata and current demo region assignments determine node-to-node connections. Blue links mean a recorded logical parent relationship and red means at least one endpoint device has a confirmed stored fault. These **must not** be interpreted as mapped underground fiber conduits, a verified 10 Gbps link, or a proven physical impact radius. No fake campus nodes were inserted from the example.
 
 Interactive satellite imagery still requires an authorized MapTiler/Mapbox-compatible map style or a correctly configured Sentinel Hub WMS instance; none is shipped as a secretly embedded key. Built-in OSM raster fallback is **not** satellite imagery. A public OSM/Overpass query might return incomplete or unnamed footprints. Preserve account quotas and license attribution.
+
+## Render deployment environment (optional Gemini reviews)
+
+The root `render.yaml` now installs `.[api,llm-gemini]` in the Python backend. In **Render → netcoop-api → Environment**, configure:
+
+- `GEMINI_API_KEY`: **secret** server-side Google Gemini API key; never set in the static site or a `NEXT_PUBLIC_` variable.
+- `NETCOOP_LLM_MODEL`: a supported Gemini model ID for the installed `langchain-google-genai` package and your Google account (for example, `gemini-2.5-flash`; confirm current model availability). Leave empty to disable AI.
+- `NETCOOP_GEMINI_AGENT_REVIEWS`: `0` by default to avoid three specialist plus report Gemini calls per public diagnosis; set to `1` only for controlled use after adding security, quotas, and budget limits.
+- `NETCOOP_GEMINI_TIMEOUT_SECONDS`: `20`.
+- `NETCOOP_CORS_ORIGINS`: the actual deployed frontend origin, without a trailing slash.
+- `NETCOOP_DB_PATH`: `/tmp/netcoop.db`; ephemeral on Render free hosting.
+
+In **Render → netcoop-ui → Environment**, set `NEXT_PUBLIC_API_URL` to your actual API origin (e.g., `https://netcoop-api.onrender.com`). Optionally set `NEXT_PUBLIC_SENTINEL_INSTANCE_ID` and the matching layer/WMS base, or `NEXT_PUBLIC_MAPTILER_KEY`, for satellite imagery. Browser-side `NEXT_PUBLIC_*` values are public, so **never** store a Gemini key or OAuth secret there.
+
+The FastAPI API currently exposes **unauthenticated diagnosis and telemetry-import endpoints**, which may create database writes and incur Gemini charges. Do not enable paid Gemini access on a public instance without adding authentication, rate limiting and request quotas (requires backend changes and explicit approval).
+
+Render Blueprint changes may need a Blueprint sync and service redeploy. Environment values entered after a static site's build require a new frontend build. An empty `NETCOOP_LLM_MODEL` keeps deterministic five-agent diagnosis functional without Gemini.
