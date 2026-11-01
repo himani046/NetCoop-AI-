@@ -67,3 +67,11 @@ The existing API's named campus reference points and device-region assignments a
 The `/campus` route also includes a **logical upstream topology panel** based on available saved parent IDs; it does not draw fictitious network cabling on top of satellite images. Historical region status playback remains available through the existing API. Satellite imagery is optional via the same `NEXT_PUBLIC_SATELLITE_STYLE_URL` configuration; OSM standard raster tiles are a **street map**, not aerial images. Overpass availability and permitted usage depend on the public service.
 
 The reference UI is an operations design direction and is not an actual accurate photogrammetric campus twin.
+
+### IIT-campus-only satellite mode
+
+The 3D canvas is constrained to the **approximate Argul-campus vicinity** with a fixed MapLibre pan boundary ([85.666,20.143]–[85.683,20.153]). These coordinates are a viewport boundary, **not an official surveyed campus land parcel**. A list displays every building name returned by the OSM building footprint query; unnamed or missing OSM buildings cannot be truthfully labeled. Geographically accurate complete coverage would require an official named-footprint dataset.
+
+Set `NEXT_PUBLIC_MAPTILER_KEY` to a valid origin-restricted browser key in `frontend/.env.local` to select MapTiler's satellite-v4 style automatically, or use `NEXT_PUBLIC_SATELLITE_STYLE_URL` with a licensed compatible style. Map imagery is not bundled or used without an authorized provider. Restart Next.js after editing `.env.local`.
+
+Blue dashed lines and labels between manually located demo regions indicate existing `parent_id` relationships **only when both endpoint devices have manual region assignments**. They are schematic connections between reference points, not known cable routes or automatic failure propagation. Hovering a mapped network region reveals the real saved diagnosis and history.
