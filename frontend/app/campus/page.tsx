@@ -1,2 +1,3 @@
 import {CampusExperience} from "../../components/campus-experience";
-export default function CampusPage(){return <CampusExperience/>}
+import {TopologySchematic} from "../../components/topology-schematic";
+export default function CampusPage(){return <><CampusExperience/><TopologySchematic/></>}
