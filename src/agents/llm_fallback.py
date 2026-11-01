@@ -3,7 +3,7 @@ import os
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 KNOWN_CAUSES = {"link_congestion","physical_interface_fault","weak_wifi_signal",
-                "dhcp_failure","dns_failure","device_overload"}
+                "dhcp_failure","dns_failure","device_overload","latency_spike","packet_loss"}
 
 class SecondOpinion(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -27,7 +27,7 @@ def structured_second_opinion(telemetry: dict, findings: list[dict],
         return None, "AI disabled: NETCOOP_LLM_MODEL not configured"
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(model=model, timeout=float(os.getenv('NETCOOP_GEMINI_TIMEOUT_SECONDS', '20')), max_retries=1).with_structured_output(SecondOpinion)
+        llm = ChatGoogleGenerativeAI(model=model, timeout=float(os.getenv('NETCOOP_GEMINI_TIMEOUT_SECONDS', '20')), max_retries=1).with_structured_output(SecondOpinion, method="json_schema")
         allowed = {key: val for key,val in telemetry.items()
                    if isinstance(val, (int,float)) and not isinstance(val,bool)}
         prompts = [
