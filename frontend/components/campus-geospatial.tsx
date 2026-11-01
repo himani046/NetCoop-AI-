@@ -1,3 +1,4 @@
+import {getCampusBasemap,campusBounds} from "../lib/campus-basemap";
 "use client";
 import {useEffect,useRef,useState} from "react";
 import maplibregl,{Map as GLMap,Marker} from "maplibre-gl";
@@ -19,11 +20,11 @@ const api="https://overpass.kumi.systems/api/interpreter";
 export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;onCatalog?:(names:string[])=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
  const holder=useRef<HTMLDivElement>(null),map=useRef<GLMap|null>(null),markers=useRef<Marker[]>([]),connectionLabels=useRef<Marker[]>([]),recent=useRef(regions);
  const [count,setCount]=useState<number|null>(null),[warning,setWarning]=useState(""),[loading,setLoading]=useState(true);
- const satelliteStyle=process.env.NEXT_PUBLIC_SATELLITE_STYLE_URL || (process.env.NEXT_PUBLIC_MAPTILER_KEY ? "https://api.maptiler.com/maps/satellite-v4/style.json?key="+encodeURIComponent(process.env.NEXT_PUBLIC_MAPTILER_KEY):undefined);
+ const basemap=getCampusBasemap();
  const [ready,setReady]=useState(false);
  useEffect(()=>{recent.current=regions},[regions]);
- useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:satelliteStyle||fallback,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75,maxBounds:CAMPUS_BOUNDS,minZoom:14.9});
- map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());connectionLabels.current.forEach(x=>x.remove());markers.current=[];connectionLabels.current=[];m.remove();map.current=null}},[satelliteStyle]);
+ useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:basemap.style,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75,maxBounds:campusBounds,minZoom:14.9});
+ map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());connectionLabels.current.forEach(x=>x.remove());markers.current=[];connectionLabels.current=[];m.remove();map.current=null}},[]);
  useEffect(()=>{if(!ready||!map.current)return;const m=map.current;let cancelled=false;
  async function load(){try{let raw:OSMResult|null=null;try{const stored=sessionStorage.getItem(cacheKey);if(stored)raw=JSON.parse(stored) as OSMResult}catch{}
  if(!raw){const q='[out:json][timeout:25];way["building"](20.143,85.666,20.153,85.683);out geom;';const response=await fetch(api+"?data="+encodeURIComponent(q),{signal:AbortSignal.timeout(29000)});if(!response.ok)throw Error("OSM footprints temporarily unavailable");raw=await response.json() as OSMResult;try{sessionStorage.setItem(cacheKey,JSON.stringify(raw))}catch{}}
@@ -58,5 +59,5 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog
  const label=document.createElement("span");label.textContent=r.name;label.className="geo-3d-name";el.appendChild(label);el.addEventListener("mouseenter",()=>onSelect(r.id));el.addEventListener("click",()=>onSelect(r.id));
  markers.current.push(new maplibregl.Marker({element:el,anchor:"center"}).setLngLat([r.longitude,r.latitude]).addTo(map.current))}
  },[ready,regions,selected,onSelect]);
- return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{satelliteStyle?"Licensed imagery style configured":"OpenStreetMap street basemap · configure satellite style for aerial imagery"}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">CAMPUS VIEWPORT RESTRICTED · RED LINKS = FAULT AT AN ENDPOINT · NOT PROOF OF DOWNSTREAM FAILURE · LOGICAL LINKS, NOT CABLE ROUTES · © OPENSTREETMAP</div></div>;
+ return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{basemap.source}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">CAMPUS VIEWPORT RESTRICTED · RED LINKS = FAULT AT AN ENDPOINT · NOT PROOF OF DOWNSTREAM FAILURE · LOGICAL LINKS, NOT CABLE ROUTES · © OPENSTREETMAP</div></div>;
 }
