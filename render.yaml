@@ -3,9 +3,11 @@ services:
     name: netcoop-api
     runtime: python
     plan: free
-    buildCommand: pip install -e ".[api,llm-gemini]"
+    buildCommand: pip install -e ".[api,llm-gemini]" && python -m compileall -q api src
     startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
       - key: NETCOOP_DB_PATH
         value: /tmp/netcoop.db
       - key: NETCOOP_CORS_ORIGINS
