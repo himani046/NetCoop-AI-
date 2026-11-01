@@ -18,13 +18,13 @@ function toGeoJSON(input:OSMResult){const features:Footprint[]=[];for(const e of
  return {type:"FeatureCollection" as const,features};}
 const api="https://overpass.kumi.systems/api/interpreter";
 export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;onCatalog?:(names:string[])=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
- const holder=useRef<HTMLDivElement>(null),map=useRef<GLMap|null>(null),markers=useRef<Marker[]>([]),connectionLabels=useRef<Marker[]>([]),recent=useRef(regions);
+ const holder=useRef<HTMLDivElement>(null),map=useRef<GLMap|null>(null),markers=useRef<Marker[]>([]),connectionLabels=useRef<Marker[]>([]),buildingLabels=useRef<Marker[]>([]),recent=useRef(regions);
  const [count,setCount]=useState<number|null>(null),[warning,setWarning]=useState(""),[loading,setLoading]=useState(true);
  const basemap=getCampusBasemap();
  const [ready,setReady]=useState(false);
  useEffect(()=>{recent.current=regions},[regions]);
  useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:basemap.style,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75,maxBounds:campusBounds,minZoom:14.9});
- map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());connectionLabels.current.forEach(x=>x.remove());markers.current=[];connectionLabels.current=[];m.remove();map.current=null}},[]);
+ map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());connectionLabels.current.forEach(x=>x.remove());buildingLabels.current.forEach(x=>x.remove());markers.current=[];connectionLabels.current=[];buildingLabels.current=[];m.remove();map.current=null}},[]);
  useEffect(()=>{if(!ready||!map.current)return;const m=map.current;let cancelled=false;
  async function load(){try{let raw:OSMResult|null=null;try{const stored=sessionStorage.getItem(cacheKey);if(stored)raw=JSON.parse(stored) as OSMResult}catch{}
  if(!raw){const q='[out:json][timeout:25];way["building"](20.143,85.666,20.153,85.683);out geom;';const response=await fetch(api+"?data="+encodeURIComponent(q),{signal:AbortSignal.timeout(29000)});if(!response.ok)throw Error("OSM footprints temporarily unavailable");raw=await response.json() as OSMResult;try{sessionStorage.setItem(cacheKey,JSON.stringify(raw))}catch{}}
@@ -32,7 +32,13 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog
  if(!m.getSource("campus-buildings"))m.addSource("campus-buildings",{type:"geojson",data:shapes});
  if(!m.getLayer("campus-buildings-3d"))m.addLayer({id:"campus-buildings-3d",type:"fill-extrusion",source:"campus-buildings",paint:{"fill-extrusion-color":["case",["==",["get","estimated"],0],"#859c9a","#aab5af"],"fill-extrusion-height":["interpolate",["linear"],["zoom"],14.9,0,16,["get","height"]],"fill-extrusion-base":0,"fill-extrusion-opacity":0.81}});
  if(!m.getLayer("campus-building-outline"))m.addLayer({id:"campus-building-outline",type:"line",source:"campus-buildings",paint:{"line-color":"#61727c","line-width":0.8}});
- if(!m.getLayer("campus-building-names"))m.addLayer({id:"campus-building-names",type:"symbol",source:"campus-buildings",filter:["!=",["get","name"],"Unnamed mapped building"],layout:{"text-field":["get","name"],"text-size":11,"text-anchor":"center","text-max-width":11},paint:{"text-color":"#1d303a","text-halo-color":"#ffffff","text-halo-width":2}});
+ buildingLabels.current.forEach(label=>label.remove());buildingLabels.current=[];
+ for(const shape of shapes.features.filter(f=>f.properties.name!=="Unnamed mapped building")){
+ const pts=shape.geometry.coordinates[0];const lon=pts.reduce((v,p)=>v+p[0],0)/pts.length;const lat=pts.reduce((v,p)=>v+p[1],0)/pts.length;
+ const label=document.createElement("span");label.className="campus-osm-name";label.textContent=shape.properties.name;label.title="Mapped OpenStreetMap building · "+shape.id;
+ label.addEventListener("click",()=>onBuilding?.(shape.properties.name,shape.properties.osm_id));
+ buildingLabels.current.push(new maplibregl.Marker({element:label,anchor:"center"}).setLngLat([lon,lat]).addTo(m));
+ }
  const interact=(ev:maplibregl.MapMouseEvent&{features?:maplibregl.MapGeoJSONFeature[]})=>{const f=ev.features?.[0];if(f)onBuilding?.(String(f.properties?.name||"Unnamed mapped building"),Number(f.properties?.osm_id||0))};
  m.on("click","campus-buildings-3d",interact);m.on("mouseenter","campus-buildings-3d",()=>{m.getCanvas().style.cursor="pointer"});m.on("mouseleave","campus-buildings-3d",()=>{m.getCanvas().style.cursor=""});
  }catch(e){if(!cancelled)setWarning(String(e))}finally{if(!cancelled)setLoading(false)}}
