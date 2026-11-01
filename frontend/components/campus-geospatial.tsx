@@ -7,14 +7,14 @@ import type {Region} from "./campus-scene";
 import type {Device} from "../lib/api";
 type OSMWay={type:string;id:number;tags?:Record<string,string>;geometry?:{lat:number;lon:number}[]};
 type OSMResult={elements?:OSMWay[]};
-type Footprint={type:"Feature";id:string;properties:{name:string;level:number;osm_id:number};geometry:{type:"Polygon";coordinates:number[][][]}};
+type Footprint={type:"Feature";id:string;properties:{name:string;height:number;estimated:number;osm_id:number};geometry:{type:"Polygon";coordinates:number[][][]}};
 const palette={fault:"#d94b46",limited:"#d99a27",healthy:"#29835b",unmonitored:"#8b9795"};
 const fallback={version:8 as const,sources:{osm:{type:"raster" as const,tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"}},layers:[{id:"osm",type:"raster" as const,source:"osm"}]};
 const cacheKey="netcoop-osm-buildings-v2";
 const CAMPUS_BOUNDS:[[number,number],[number,number]]=[[85.666,20.143],[85.683,20.153]];
 function toGeoJSON(input:OSMResult){const features:Footprint[]=[];for(const e of input.elements||[]){if(e.type!=="way"||!e.tags?.building||!e.geometry||e.geometry.length<4)continue;
  const coordinates=e.geometry.map(p=>[p.lon,p.lat]);if(coordinates[0][0]!==coordinates[coordinates.length-1][0]||coordinates[0][1]!==coordinates[coordinates.length-1][1])continue;
- const levels=Number(e.tags["building:levels"]||2);features.push({type:"Feature",id:"way/"+e.id,properties:{name:e.tags.name||"Unnamed mapped building",level:Number.isFinite(levels)?Math.min(12,Math.max(1,levels)):2,osm_id:e.id},geometry:{type:"Polygon",coordinates:[coordinates]}})}
+ const taggedHeight=parseFloat(e.tags.height||"");const levels=Number(e.tags["building:levels"]||2);const height=Number.isFinite(taggedHeight)&&taggedHeight>0?Math.min(taggedHeight,120):Math.min(12,Math.max(1,Number.isFinite(levels)?levels:2))*3.2;features.push({type:"Feature",id:"way/"+e.id,properties:{name:e.tags.name||"Unnamed mapped building",height,estimated:Number(!(Number.isFinite(taggedHeight)&&taggedHeight>0)),osm_id:e.id},geometry:{type:"Polygon",coordinates:[coordinates]}})}
  return {type:"FeatureCollection" as const,features};}
 const api="https://overpass.kumi.systems/api/interpreter";
 export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;onCatalog?:(names:string[])=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
@@ -30,8 +30,9 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog
  if(!raw){const q='[out:json][timeout:25];way["building"](20.143,85.666,20.153,85.683);out geom;';const response=await fetch(api+"?data="+encodeURIComponent(q),{signal:AbortSignal.timeout(29000)});if(!response.ok)throw Error("OSM footprints temporarily unavailable");raw=await response.json() as OSMResult;try{sessionStorage.setItem(cacheKey,JSON.stringify(raw))}catch{}}
  if(cancelled)return;const shapes=toGeoJSON(raw);setCount(shapes.features.length);onCatalog?.([...new Set(shapes.features.map(f=>f.properties.name).filter(n=>n!=="Unnamed mapped building"))].sort());
  if(!m.getSource("campus-buildings"))m.addSource("campus-buildings",{type:"geojson",data:shapes});
- if(!m.getLayer("campus-buildings-3d"))m.addLayer({id:"campus-buildings-3d",type:"fill-extrusion",source:"campus-buildings",paint:{"fill-extrusion-color":"#aab5af","fill-extrusion-height":["*",["get","level"],3.2],"fill-extrusion-base":0,"fill-extrusion-opacity":0.81}});
+ if(!m.getLayer("campus-buildings-3d"))m.addLayer({id:"campus-buildings-3d",type:"fill-extrusion",source:"campus-buildings",paint:{"fill-extrusion-color":["case",["==",["get","estimated"],0],"#859c9a","#aab5af"],"fill-extrusion-height":["interpolate",["linear"],["zoom"],14.9,0,16,["get","height"]],"fill-extrusion-base":0,"fill-extrusion-opacity":0.81}});
  if(!m.getLayer("campus-building-outline"))m.addLayer({id:"campus-building-outline",type:"line",source:"campus-buildings",paint:{"line-color":"#61727c","line-width":0.8}});
+ if(!m.getLayer("campus-building-names"))m.addLayer({id:"campus-building-names",type:"symbol",source:"campus-buildings",filter:["!=",["get","name"],"Unnamed mapped building"],layout:{"text-field":["get","name"],"text-size":11,"text-anchor":"center","text-max-width":11},paint:{"text-color":"#1d303a","text-halo-color":"#ffffff","text-halo-width":2}});
  const interact=(ev:maplibregl.MapMouseEvent&{features?:maplibregl.MapGeoJSONFeature[]})=>{const f=ev.features?.[0];if(f)onBuilding?.(String(f.properties?.name||"Unnamed mapped building"),Number(f.properties?.osm_id||0))};
  m.on("click","campus-buildings-3d",interact);m.on("mouseenter","campus-buildings-3d",()=>{m.getCanvas().style.cursor="pointer"});m.on("mouseleave","campus-buildings-3d",()=>{m.getCanvas().style.cursor=""});
  }catch(e){if(!cancelled)setWarning(String(e))}finally{if(!cancelled)setLoading(false)}}
