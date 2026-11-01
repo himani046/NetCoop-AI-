@@ -198,3 +198,5 @@ tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
 @media(max-width:1120px){.campus-geospatial{height:500px}}
 @media(max-width:600px){.campus-geospatial{height:400px}.geo-3d-caption{max-width:220px;padding:10px}.geo-3d-name{font-size:9px;max-width:135px;overflow:hidden;text-overflow:ellipsis}.geo-3d-bottom{display:none}}
 @media(prefers-reduced-motion:reduce){.geo-3d-marker.fault .geo-3d-halo{animation:none}}
+
+.campus-building-directory{margin:22px 0;border:1px solid #dce4e2;border-radius:7px;padding:12px;background:#f8faf8;max-height:280px;overflow:auto}.campus-building-directory summary{font-weight:750;color:#315fc0;cursor:pointer}.directory-name{font-size:12px;padding:9px 3px;border-bottom:1px solid #e7ecea}.geo-link-name{font:700 10px 'IBM Plex Mono',monospace;color:#194c92;white-space:nowrap;background:#fffffff0;padding:5px 8px;border:1px solid #9bb6d7;border-radius:4px;pointer-events:none;box-shadow:0 2px 8px #1e355d20}
