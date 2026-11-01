@@ -3,24 +3,26 @@ import {useEffect,useRef,useState} from "react";
 import maplibregl,{Map as GLMap,Marker} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type {Region} from "./campus-scene";
+import type {Device} from "../lib/api";
 type OSMWay={type:string;id:number;tags?:Record<string,string>;geometry?:{lat:number;lon:number}[]};
 type OSMResult={elements?:OSMWay[]};
 type Footprint={type:"Feature";id:string;properties:{name:string;level:number;osm_id:number};geometry:{type:"Polygon";coordinates:number[][][]}};
 const palette={fault:"#d94b46",limited:"#d99a27",healthy:"#29835b",unmonitored:"#8b9795"};
 const fallback={version:8 as const,sources:{osm:{type:"raster" as const,tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"}},layers:[{id:"osm",type:"raster" as const,source:"osm"}]};
-const cacheKey="netcoop-osm-buildings-v1";
+const cacheKey="netcoop-osm-buildings-v2";
+const CAMPUS_BOUNDS:[[number,number],[number,number]]=[[85.666,20.143],[85.683,20.153]];
 function toGeoJSON(input:OSMResult){const features:Footprint[]=[];for(const e of input.elements||[]){if(e.type!=="way"||!e.tags?.building||!e.geometry||e.geometry.length<4)continue;
  const coordinates=e.geometry.map(p=>[p.lon,p.lat]);if(coordinates[0][0]!==coordinates[coordinates.length-1][0]||coordinates[0][1]!==coordinates[coordinates.length-1][1])continue;
  const levels=Number(e.tags["building:levels"]||2);features.push({type:"Feature",id:"way/"+e.id,properties:{name:e.tags.name||"Unnamed mapped building",level:Number.isFinite(levels)?Math.min(12,Math.max(1,levels)):2,osm_id:e.id},geometry:{type:"Polygon",coordinates:[coordinates]}})}
  return {type:"FeatureCollection" as const,features};}
 const api="https://overpass.kumi.systems/api/interpreter";
-export function CampusGeospatial({regions,selected,onSelect,onBuilding}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void}){
+export function CampusGeospatial({regions,selected,onSelect,onBuilding,devices=[],assignments=[]}:{regions:Region[];selected:string|null;onSelect:(id:string)=>void;onBuilding?:(name:string,osmId:number)=>void;devices?:Device[];assignments?:{device_id:string;region_id:string}[]}){
  const holder=useRef<HTMLDivElement>(null),map=useRef<GLMap|null>(null),markers=useRef<Marker[]>([]),recent=useRef(regions);
  const [count,setCount]=useState<number|null>(null),[warning,setWarning]=useState(""),[loading,setLoading]=useState(true);
  const satelliteStyle=process.env.NEXT_PUBLIC_SATELLITE_STYLE_URL;
  const [ready,setReady]=useState(false);
  useEffect(()=>{recent.current=regions},[regions]);
- useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:satelliteStyle||fallback,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75});
+ useEffect(()=>{if(!holder.current)return;const m=new maplibregl.Map({container:holder.current,style:satelliteStyle||fallback,center:[85.6735,20.1478],zoom:16,pitch:63,bearing:-27,antialias:true,maxPitch:75,maxBounds:CAMPUS_BOUNDS,minZoom:14.9});
  map.current=m;m.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");m.on("load",()=>setReady(true));return()=>{markers.current.forEach(x=>x.remove());markers.current=[];m.remove();map.current=null}},[satelliteStyle]);
  useEffect(()=>{if(!ready||!map.current)return;const m=map.current;let cancelled=false;
  async function load(){try{let raw:OSMResult|null=null;try{const stored=sessionStorage.getItem(cacheKey);if(stored)raw=JSON.parse(stored) as OSMResult}catch{}
@@ -33,10 +35,25 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding}:{regions
  m.on("click","campus-buildings-3d",interact);m.on("mouseenter","campus-buildings-3d",()=>{m.getCanvas().style.cursor="pointer"});m.on("mouseleave","campus-buildings-3d",()=>{m.getCanvas().style.cursor=""});
  }catch(e){if(!cancelled)setWarning(String(e))}finally{if(!cancelled)setLoading(false)}}
  void load();return()=>{cancelled=true}},[ready,onBuilding]);
+ useEffect(()=>{if(!ready||!map.current)return;const m=map.current;
+ const byId=new Map(devices.map(d=>[d.device_id,d]));
+ const regionId=new Map(assignments.map(a=>[a.device_id,a.region_id]));
+ const locations=new Map(regions.map(r=>[r.id,r]));
+ const features=devices.flatMap(d=>{const parent=byId.get((d as Device&{parent_id?:string|null}).parent_id||"");
+ if(!parent)return [];
+ const from=locations.get(regionId.get(d.device_id)||"");const to=locations.get(regionId.get(parent.device_id)||"");
+ if(!from||!to||from.id===to.id)return [];
+ return [{type:"Feature" as const,properties:{label:parent.device_id+" → "+d.device_id,device:d.device_id,upstream:parent.device_id},geometry:{type:"LineString" as const,coordinates:[[to.longitude,to.latitude],[from.longitude,from.latitude]]}}]});
+ const geojson={type:"FeatureCollection" as const,features};
+ const src=m.getSource("logical-connections") as maplibregl.GeoJSONSource|undefined;
+ if(src)src.setData(geojson);else{m.addSource("logical-connections",{type:"geojson",data:geojson});
+ m.addLayer({id:"logical-connection-lines",type:"line",source:"logical-connections",paint:{"line-color":"#315fc0","line-width":3,"line-dasharray":[2,1],"line-opacity":.9}});
+ m.addLayer({id:"logical-connection-labels",type:"symbol",source:"logical-connections",layout:{"symbol-placement":"line","text-field":["get","label"],"text-size":11,"text-font":["Open Sans Regular","Arial Unicode MS Regular"]},paint:{"text-color":"#183e7a","text-halo-color":"#ffffff","text-halo-width":2}})}
+ },[ready,devices,assignments,regions]);
  useEffect(()=>{if(!ready||!map.current)return;markers.current.forEach(x=>x.remove());markers.current=[];
  for(const r of regions){const el=document.createElement("button");el.type="button";el.className="geo-3d-marker "+r.status+(selected===r.id?" selected":"");el.style.setProperty("--status-color",palette[r.status]);el.setAttribute("aria-label",r.name+"; "+r.status+"; "+r.devices.length+" devices");el.innerHTML='<span class="geo-3d-halo"></span><span class="geo-3d-pin"></span>';
  const label=document.createElement("span");label.textContent=r.name;label.className="geo-3d-name";el.appendChild(label);el.addEventListener("mouseenter",()=>onSelect(r.id));el.addEventListener("click",()=>onSelect(r.id));
  markers.current.push(new maplibregl.Marker({element:el,anchor:"center"}).setLngLat([r.longitude,r.latitude]).addTo(map.current))}
  },[ready,regions,selected,onSelect]);
- return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{satelliteStyle?"Licensed imagery style configured":"OpenStreetMap street basemap · configure satellite style for aerial imagery"}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">EXTRUSION HEIGHTS ESTIMATED WHEN NOT TAGGED · © OPENSTREETMAP CONTRIBUTORS</div></div>;
+ return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{satelliteStyle?"Licensed imagery style configured":"OpenStreetMap street basemap · configure satellite style for aerial imagery"}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">CAMPUS VIEWPORT RESTRICTED · BLUE LINKS = LOGICAL PARENT RELATIONSHIPS, NOT CABLE ROUTES · © OPENSTREETMAP</div></div>;
 }
