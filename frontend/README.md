@@ -100,3 +100,11 @@ Create a configuration instance and named true/natural-color layer in your Senti
 Sentinel-2 has approximately 10 m native resolution in its best bands and is **not a live video of campus buildings**. The latest clear image can be days or weeks old due to satellite passes and cloud cover. It does not contain live router status. Real building-level NOC overlays are drawn from the backend's saved diagnostic observations and explicitly assigned device regions. An aerial photograph with the same sharp resolution as the reference picture would require a suitable licensed higher-resolution imagery provider, which Sentinel-2 alone cannot supply.
 
 After editing `.env.local`, restart `npm run dev`; for static deployment rebuild the frontend.
+
+## Mapbox-style 3D visualization (MapLibre implementation)
+
+The provided Mapbox GL JS example uses `mapbox://` proprietary vector sources and a public Mapbox token. The frontend continues with open-source **MapLibre GL JS**, so it does not assume Mapbox's composite building source is available. The campus view loads OSM GeoJSON building footprints via Overpass, extrudes height-tagged buildings in metres with a smooth zoom ramp, and overlays the mapped OSM building names as interactive labels (no font-glyph endpoint needed on a raster basemap). Missing height tags use explicitly illustrative estimates.
+
+Saved `parent_id` metadata and current demo region assignments determine node-to-node connections. Blue links mean a recorded logical parent relationship and red means at least one endpoint device has a confirmed stored fault. These **must not** be interpreted as mapped underground fiber conduits, a verified 10 Gbps link, or a proven physical impact radius. No fake campus nodes were inserted from the example.
+
+Interactive satellite imagery still requires an authorized MapTiler/Mapbox-compatible map style or a correctly configured Sentinel Hub WMS instance; none is shipped as a secretly embedded key. Built-in OSM raster fallback is **not** satellite imagery. A public OSM/Overpass query might return incomplete or unnamed footprints. Preserve account quotas and license attribution.
