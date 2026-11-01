@@ -39,23 +39,24 @@ export function CampusGeospatial({regions,selected,onSelect,onBuilding,onCatalog
  const byId=new Map(devices.map(d=>[d.device_id,d]));
  const regionId=new Map(assignments.map(a=>[a.device_id,a.region_id]));
  const locations=new Map(regions.map(r=>[r.id,r]));
+ const failedIds=new Set(regions.flatMap(r=>r.devices.filter(d=>d.status==="diagnosed").map(d=>d.device_id)));
  const features=devices.flatMap(d=>{const parent=byId.get((d as Device&{parent_id?:string|null}).parent_id||"");
  if(!parent)return [];
  const from=locations.get(regionId.get(d.device_id)||"");const to=locations.get(regionId.get(parent.device_id)||"");
  if(!from||!to||from.id===to.id)return [];
- return [{type:"Feature" as const,properties:{label:parent.device_id+" → "+d.device_id,device:d.device_id,upstream:parent.device_id},geometry:{type:"LineString" as const,coordinates:[[to.longitude,to.latitude],[from.longitude,from.latitude]]}}]});
+ return [{type:"Feature" as const,properties:{label:parent.device_id+" → "+d.device_id,device:d.device_id,upstream:parent.device_id,alert:failedIds.has(d.device_id)||failedIds.has(parent.device_id)?1:0},geometry:{type:"LineString" as const,coordinates:[[to.longitude,to.latitude],[from.longitude,from.latitude]]}}]});
  connectionLabels.current.forEach(label=>label.remove());connectionLabels.current=[];
- for(const feature of features){const [a,b]=feature.geometry.coordinates;const el=document.createElement("span");el.className="geo-link-name";el.textContent=feature.properties.label;el.title="Logical parent relationship only — not a mapped physical cable";connectionLabels.current.push(new maplibregl.Marker({element:el,anchor:"center"}).setLngLat([(a[0]+b[0])/2,(a[1]+b[1])/2]).addTo(m))}
+ for(const feature of features){const [a,b]=feature.geometry.coordinates;const el=document.createElement("span");el.className="geo-link-name"+(feature.properties.alert?" geo-link-alert":"");el.textContent=(feature.properties.alert?"⚠ ":"")+feature.properties.label;el.title="Logical parent relationship only — not a mapped physical cable";connectionLabels.current.push(new maplibregl.Marker({element:el,anchor:"center"}).setLngLat([(a[0]+b[0])/2,(a[1]+b[1])/2]).addTo(m))}
  const geojson={type:"FeatureCollection" as const,features};
  const src=m.getSource("logical-connections") as maplibregl.GeoJSONSource|undefined;
  if(src)src.setData(geojson);else{m.addSource("logical-connections",{type:"geojson",data:geojson});
- m.addLayer({id:"logical-connection-lines",type:"line",source:"logical-connections",paint:{"line-color":"#315fc0","line-width":3,"line-dasharray":[2,1],"line-opacity":.9}});
+ m.addLayer({id:"logical-connection-lines",type:"line",source:"logical-connections",paint:{"line-color":["case",["==",["get","alert"],1],"#d94b46","#315fc0"],"line-width":3,"line-dasharray":[2,1],"line-opacity":.9}});
 }
  },[ready,devices,assignments,regions]);
  useEffect(()=>{if(!ready||!map.current)return;markers.current.forEach(x=>x.remove());markers.current=[];
- for(const r of regions){const el=document.createElement("button");el.type="button";el.className="geo-3d-marker "+r.status+(selected===r.id?" selected":"");el.style.setProperty("--status-color",palette[r.status]);el.setAttribute("aria-label",r.name+"; "+r.status+"; "+r.devices.length+" devices");el.innerHTML='<span class="geo-3d-halo"></span><span class="geo-3d-pin"></span>';
+ for(const r of regions){const el=document.createElement("button");el.type="button";el.className="geo-3d-marker "+r.status+(selected===r.id?" selected":"");el.style.setProperty("--status-color",palette[r.status]);el.setAttribute("aria-label",r.name+"; "+r.status+"; "+r.devices.length+" devices");el.innerHTML='<span class="geo-3d-halo"></span><span class="geo-3d-pin"></span>'+(r.status==="fault"?'<span class="geo-alert-glyph">!</span>':"");
  const label=document.createElement("span");label.textContent=r.name;label.className="geo-3d-name";el.appendChild(label);el.addEventListener("mouseenter",()=>onSelect(r.id));el.addEventListener("click",()=>onSelect(r.id));
  markers.current.push(new maplibregl.Marker({element:el,anchor:"center"}).setLngLat([r.longitude,r.latitude]).addTo(map.current))}
  },[ready,regions,selected,onSelect]);
- return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{satelliteStyle?"Licensed imagery style configured":"OpenStreetMap street basemap · configure satellite style for aerial imagery"}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">CAMPUS VIEWPORT RESTRICTED · BLUE LINKS = LOGICAL PARENT RELATIONSHIPS, NOT CABLE ROUTES · © OPENSTREETMAP</div></div>;
+ return <div className="campus-geospatial"><div ref={holder} className="campus-geospatial-canvas"/><div className="geo-3d-caption"><b>3D CAMPUS / IIT BHUBANESWAR</b><span>{satelliteStyle?"Licensed imagery style configured":"OpenStreetMap street basemap · configure satellite style for aerial imagery"}</span><span>{loading?"Loading mapped building footprints…":count!==null?count+" OSM mapped building outlines":"Building footprints unavailable"}</span></div>{warning&&<div className="geo-3d-warning">OSM geometry unavailable; reference regions remain interactive. {warning}</div>}<div className="geo-3d-bottom">CAMPUS VIEWPORT RESTRICTED · RED LINKS = FAULT AT AN ENDPOINT · NOT PROOF OF DOWNSTREAM FAILURE · LOGICAL LINKS, NOT CABLE ROUTES · © OPENSTREETMAP</div></div>;
 }
