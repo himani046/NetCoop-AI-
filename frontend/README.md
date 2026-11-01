@@ -75,3 +75,11 @@ The 3D canvas is constrained to the **approximate Argul-campus vicinity** with a
 Set `NEXT_PUBLIC_MAPTILER_KEY` to a valid origin-restricted browser key in `frontend/.env.local` to select MapTiler's satellite-v4 style automatically, or use `NEXT_PUBLIC_SATELLITE_STYLE_URL` with a licensed compatible style. Map imagery is not bundled or used without an authorized provider. Restart Next.js after editing `.env.local`.
 
 Blue dashed lines and labels between manually located demo regions indicate existing `parent_id` relationships **only when both endpoint devices have manual region assignments**. They are schematic connections between reference points, not known cable routes or automatic failure propagation. Hovering a mapped network region reveals the real saved diagnosis and history.
+
+### Router fault alarm overlays (frontend-only)
+
+Both `/satellite` and `/campus` now mark a manually assigned region **red** when the API reports a diagnosed fault for one of its assigned devices; inconclusive observations remain **yellow**, healthy observations **green**, and regions lacking assigned observations neutral. The rendered fault icon is a UI representation of saved synthetic/test telemetry, **not an active hardware alarm**.
+
+Dashed topology lines are constructed only from saved `parent_id` relationships where *both* devices have manually assigned region coordinates. The link is colored **red** if either endpoint has a diagnosed fault, and blue otherwise. Red link coloring means an endpoint diagnosis, **not verified network propagation, physical cable geography, or proven downstream outage**. Unassigned relationships remain available in the separate logical topology list.
+
+Map imagery is not a continuous live satellite video feed. A supported licensed imagery provider returns periodically updated raster imagery; actual live network status requires a real monitoring collector and backend ingestion integration, which this frontend-only change does not implement. Existing device history and scoring logic remain unchanged.
