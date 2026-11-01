@@ -1,5 +1,5 @@
-import {getCampusBasemap,campusBounds} from "../lib/campus-basemap";
 "use client";
+import {getCampusBasemap,campusBounds} from "../lib/campus-basemap";
 import {useEffect,useRef,useState} from "react";
 import maplibregl,{Map as GLMap,Marker,Popup} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
