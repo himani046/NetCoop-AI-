@@ -11,20 +11,14 @@ CAUSE_METRICS = {
     "packet_loss": {"packet_loss_pct", "interface_errors", "latency_ms"},
     "latency_spike": {"latency_ms", "jitter_ms", "packet_loss_pct"},
 }
-PRIORITY = [
-    "physical_interface_fault", "weak_wifi_signal", "dhcp_failure", "dns_failure",
-    "link_congestion", "packet_loss", "latency_spike", "device_overload",
-]
+PRIORITY = ["physical_interface_fault", "weak_wifi_signal", "dhcp_failure", "dns_failure",
+            "link_congestion", "packet_loss", "latency_spike", "device_overload"]
 
 
 def correlate(t, findings, warnings, arbitration=False):
-    """Choose a supported fault, or report healthy only with adequate device-relevant data."""
-    conflicts = []
-    notes = []
-    hypotheses = [
-        f.primary_hypothesis for f in findings
-        if f.primary_hypothesis in CAUSE_METRICS
-    ]
+    """Select a supported fault, or healthy only when device-relevant data is sufficient."""
+    hypotheses = [f.primary_hypothesis for f in findings if f.primary_hypothesis in CAUSE_METRICS]
+    conflicts, notes = [], []
     if "link_congestion" in hypotheses and "physical_interface_fault" in hypotheses:
         conflicts.append("Congestion and physical/interface-fault hypotheses disagree")
     elif len(set(hypotheses)) > 1:
@@ -32,24 +26,19 @@ def correlate(t, findings, warnings, arbitration=False):
     if arbitration and conflicts:
         notes.append("Arbitration compared metric-specific evidence, not agent votes")
 
-    candidate = None
-    loss = t.get("packet_loss_pct")
-    latency = t.get("latency_ms")
-    util = t.get("link_utilization_pct")
-    drops = t.get("queue_drops")
-    interface_errors = t.get("interface_errors")
-    crc_errors = t.get("crc_errors")
-    rssi, snr = t.get("rssi_dbm"), t.get("snr_db")
-    retries = t.get("retransmissions_pct")
+    loss, latency = t.get("packet_loss_pct"), t.get("latency_ms")
+    util, drops = t.get("link_utilization_pct"), t.get("queue_drops")
+    interface_errors, crc_errors = t.get("interface_errors"), t.get("crc_errors")
+    rssi, snr, retries = t.get("rssi_dbm"), t.get("snr_db"), t.get("retransmissions_pct")
     cpu, memory = t.get("cpu_pct"), t.get("memory_pct")
+    jitter = t.get("jitter_ms")
+    candidate = None
 
-    # Strong combined evidence suggests a physical/interface problem, but does not prove it.
-    if ((interface_errors is not None and interface_errors >= 100 and
-         loss is not None and loss >= 10) or
-        (crc_errors is not None and crc_errors >= 100 and
-         (util is None or util < 85)):
+    # This is a suspected fault class, not proof of physical damage.
+    if ((interface_errors is not None and interface_errors >= 100 and loss is not None and loss >= 10)
+            or (crc_errors is not None and crc_errors >= 100 and (util is None or util < 85))):
         candidate = "physical_interface_fault"
-        notes.append("Possible physical/interface fault; verify counters and inspect hardware before concluding.")
+        notes.append("Possible physical/interface fault; validate counters and inspect hardware before concluding.")
     elif rssi is not None and snr is not None and rssi < -75 and snr < 15:
         candidate = "weak_wifi_signal"
     elif t.get("dhcp_timeout_pct") is not None and t["dhcp_timeout_pct"] >= 50 and t.get("gateway_ping_ms") is not None and t["gateway_ping_ms"] < 20:
@@ -60,19 +49,21 @@ def correlate(t, findings, warnings, arbitration=False):
         (latency is not None and latency >= 100) or (drops is not None and drops >= 100)
     ):
         candidate = "link_congestion"
-    elif loss is not None and loss >= 5:
+    elif loss is not None and loss >= 5 and any(
+        t.get(k) is not None for k in ("latency_ms", "interface_errors", "jitter_ms", "link_utilization_pct")
+    ):
         candidate = "packet_loss"
-    elif latency is not None and latency >= 150:
+    elif latency is not None and latency >= 150 and any(
+        t.get(k) is not None for k in ("jitter_ms", "packet_loss_pct", "link_utilization_pct")
+    ):
         candidate = "latency_spike"
-    elif cpu is not None and cpu >= 90 or memory is not None and memory >= 90:
+    elif (cpu is not None and cpu >= 90) or (memory is not None and memory >= 90):
         candidate = "device_overload"
 
-    # Keep specialist evidence for the selected cause, supplemented by direct telemetry evidence.
-    evidence = [e for f in findings for e in f.supporting_evidence]
+    evidence = [item for f in findings for item in f.supporting_evidence]
     selected_metrics = CAUSE_METRICS.get(candidate, set())
-    diagnostic = [e for e in evidence if e.metric in selected_metrics]
+    diagnostic = [item for item in evidence if item.metric in selected_metrics]
     if candidate:
-        # Directly create evidence for metrics that the specialist agents did not expose.
         from src.agents.base import e as evidence_item
         direct = {
             "link_congestion": [
@@ -103,7 +94,6 @@ def correlate(t, findings, warnings, arbitration=False):
             if value is not None and key not in existing:
                 diagnostic.append(evidence_item(key, value, severity, interpretation, unit))
                 existing.add(key)
-
     if candidate and not diagnostic:
         notes.append("Fault threshold matched, but no supporting evidence was available.")
         candidate = None
@@ -113,10 +103,10 @@ def correlate(t, findings, warnings, arbitration=False):
         notes.append("Insufficient convergent support")
         candidate, confidence = None, 0.0
 
-    # Healthy is device-aware: do not require Wi-Fi/DHCP/DNS metrics from a switch,
-    # or switch CPU/queue metrics from an access point. Unknown required values stay inconclusive.
     device_id = str(t.get("device_id", "")).upper()
-    is_wireless = "AP_" in device_id or any(t.get(k) is not None for k in ("rssi_dbm", "snr_db", "retransmissions_pct"))
+    is_wireless = "AP_" in device_id or any(
+        t.get(k) is not None for k in ("rssi_dbm", "snr_db", "retransmissions_pct")
+    )
     if is_wireless:
         required = ("rssi_dbm", "snr_db", "retransmissions_pct")
         complete = all(t.get(k) is not None for k in required)
@@ -142,7 +132,7 @@ def correlate(t, findings, warnings, arbitration=False):
     blocking_warnings = [
         w for w in warnings
         if w not in ignored_metadata
-        and not str(w).startswith("Unrecognized telemetry key: interface_errors")
+        and not str(w).startswith("interface_errors is not necessarily CRC errors")
     ]
     healthy = bool(not candidate and healthy_thresholds and not blocking_warnings)
     if healthy:
@@ -155,15 +145,11 @@ def correlate(t, findings, warnings, arbitration=False):
         alternatives.extend(x for x in ("packet_loss", "latency_spike") if x not in alternatives)
     if candidate == "physical_interface_fault":
         alternatives.extend(x for x in ("packet_loss", "link_congestion") if x not in alternatives)
-
     return {
-        "healthy": healthy,
-        "cause": candidate,
+        "healthy": healthy, "cause": candidate,
         "confidence": confidence if candidate else 0.0,
         "evidence": diagnostic if candidate else evidence,
         "alternatives": list(dict.fromkeys(alternatives)),
-        "conflicts": conflicts,
-        "resolution_notes": notes,
-        "inconclusive": not bool(candidate) and not healthy,
-        "warnings": warnings,
+        "conflicts": conflicts, "resolution_notes": notes,
+        "inconclusive": not bool(candidate) and not healthy, "warnings": warnings,
     }
