@@ -57,3 +57,13 @@ The existing API supplies *reference coordinates*, not surveyed building polygon
 - Authentication, rate limits, access control, paid API quotas, and real campus device permissions require separate backend work before production use.
 
 All changes in this redesign are inside `frontend/`.
+
+## 3D campus upgrade (OSM footprints)
+
+The `/campus` view uses MapLibre WebGL with interactive geographic **OpenStreetMap building footprints** fetched client-side from a bounded IIT Bhubaneswar / Argul campus Overpass query. Footprints are extruded into 3D. Their real plan shape comes from OSM, but **building heights are illustrative** when no `building:levels` tag exists. A building is labeled by its OSM `name` tag when available; unnamed polygons are explicitly identified as unnamed. **Complete coverage of every IIT Bhubaneswar building cannot be guaranteed by OSM data.** Failed or blocked Overpass requests leave reference status markers accessible and display a geometry-unavailable warning.
+
+The existing API's named campus reference points and device-region assignments are separate from OSM building polygons. Hovering a status marker shows the assigned region; the right inspector provides saved device diagnoses, up to five previous observations and available parent-device metadata. Clicking a building footprint reveals its OSM name and object ID, without falsely assigning network equipment by spatial proximity. Only explicitly configured device assignments may influence health colors.
+
+The `/campus` route also includes a **logical upstream topology panel** based on available saved parent IDs; it does not draw fictitious network cabling on top of satellite images. Historical region status playback remains available through the existing API. Satellite imagery is optional via the same `NEXT_PUBLIC_SATELLITE_STYLE_URL` configuration; OSM standard raster tiles are a **street map**, not aerial images. Overpass availability and permitted usage depend on the public service.
+
+The reference UI is an operations design direction and is not an actual accurate photogrammetric campus twin.
