@@ -83,3 +83,20 @@ Both `/satellite` and `/campus` now mark a manually assigned region **red** when
 Dashed topology lines are constructed only from saved `parent_id` relationships where *both* devices have manually assigned region coordinates. The link is colored **red** if either endpoint has a diagnosed fault, and blue otherwise. Red link coloring means an endpoint diagnosis, **not verified network propagation, physical cable geography, or proven downstream outage**. Unassigned relationships remain available in the separate logical topology list.
 
 Map imagery is not a continuous live satellite video feed. A supported licensed imagery provider returns periodically updated raster imagery; actual live network status requires a real monitoring collector and backend ingestion integration, which this frontend-only change does not implement. Existing device history and scoring logic remain unchanged.
+
+### Sentinel Hub satellite basemap (new)
+
+The browser-facing `/campus` and `/satellite` views now accept a **Sentinel Hub OGC WMS** configuration, with MapLibre XYZ raster tile requests using a Web Mercator bounding box. In `frontend/.env.local`, set:
+
+```dotenv
+NEXT_PUBLIC_SENTINEL_INSTANCE_ID=YOUR_WMS_INSTANCE_ID
+NEXT_PUBLIC_SENTINEL_LAYER=NATURAL-COLOR
+NEXT_PUBLIC_SENTINEL_WMS_BASE=copernicus
+NEXT_PUBLIC_SENTINEL_TIME=
+```
+
+Create a configuration instance and named true/natural-color layer in your Sentinel Hub or Copernicus Data Space dashboard. The instance ID will be used in **public browser requests**; consider its quota and access model, and **never put OAuth client ID/secrets or access tokens in NEXT_PUBLIC_ variables**. A service that requires secret-based authentication needs a secure proxy, which is outside this frontend-only scope. If no Sentinel instance ID is configured, the app still supports a licensed style URL or MapTiler browser key, then falls back to an attributed OSM street map.
+
+Sentinel-2 has approximately 10 m native resolution in its best bands and is **not a live video of campus buildings**. The latest clear image can be days or weeks old due to satellite passes and cloud cover. It does not contain live router status. Real building-level NOC overlays are drawn from the backend's saved diagnostic observations and explicitly assigned device regions. An aerial photograph with the same sharp resolution as the reference picture would require a suitable licensed higher-resolution imagery provider, which Sentinel-2 alone cannot supply.
+
+After editing `.env.local`, restart `npm run dev`; for static deployment rebuild the frontend.
