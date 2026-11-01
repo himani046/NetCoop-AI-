@@ -176,3 +176,25 @@ tr:hover td{background:#f7f9f7}.map-disclaimer{color:#748086}
 .site-name{position:absolute;left:31px;top:4px;background:#fffffff0;border:1px solid #dae1db;border-radius:4px;padding:5px 8px;white-space:nowrap;font:700 11px "DM Sans",sans-serif;color:#29363a;box-shadow:0 1px 6px #0002;pointer-events:none}
 
 .topology-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:10px;margin-top:16px}.topology-edge{display:flex;align-items:center;gap:9px;background:#f7f9f7;border:1px solid #e4e9e6;border-radius:8px;padding:11px;flex-wrap:wrap}.topology-node{background:#fff;border:1px solid #dce2df;border-radius:6px;padding:8px 11px;font:600 11px 'IBM Plex Mono',monospace;color:#3c4b53}.topology-arrow{color:#315fc0;font-size:18px}.topology-edge .status{font-size:9px}
+
+/* Real mapped 3D campus: map canvas and grounded status overlays. */
+.campus-geospatial{height:650px;width:100%;position:relative;background:#e5e9e4;overflow:hidden}
+.campus-geospatial-canvas{position:absolute;inset:0;height:100%;width:100%}
+.map-layout .map-frame{background:#ebede8}.campus-geospatial .maplibregl-ctrl-group{box-shadow:0 2px 10px #18262c22}
+.geo-3d-caption{position:absolute;top:18px;left:18px;z-index:2;pointer-events:none;background:#ffffffed;border:1px solid #e2e7e4;padding:14px 16px;border-radius:9px;box-shadow:0 4px 24px #1e303021;display:flex;flex-direction:column;gap:5px;max-width:330px}
+.geo-3d-caption b{font:700 11px 'IBM Plex Mono',monospace;color:#243641;letter-spacing:1px}
+.geo-3d-caption span{font-size:11px;color:#6b797d;line-height:1.5}
+.geo-3d-bottom{position:absolute;right:18px;bottom:16px;background:#ffffffed;border-radius:5px;padding:8px 12px;font:600 8px 'IBM Plex Mono',monospace;letter-spacing:.65px;color:#64716d;pointer-events:none}
+.geo-3d-warning{position:absolute;top:118px;left:18px;z-index:2;background:#fff4e1;border:1px solid #f0d3a1;padding:12px;max-width:300px;font-size:11px;color:#77591e}
+.geo-3d-marker{width:35px;height:35px;position:relative;border:0;background:transparent;padding:0;cursor:pointer;filter:none!important}
+.geo-3d-halo{position:absolute;inset:0;border-radius:50%;background:color-mix(in srgb,var(--status-color) 23%,transparent);border:2px solid var(--status-color);box-shadow:0 0 20px color-mix(in srgb,var(--status-color) 35%,transparent)}
+.geo-3d-pin{position:absolute;left:11px;top:11px;width:13px;height:13px;border:3px solid #fff;border-radius:50%;background:var(--status-color)}
+.geo-3d-name{position:absolute;left:39px;top:2px;white-space:nowrap;background:#fffffff2;color:#233139;border:1px solid #dee4e2;border-left:3px solid var(--status-color);border-radius:5px;font:700 11px 'DM Sans',sans-serif;padding:8px 10px;text-align:left;box-shadow:0 2px 13px #111b1b22}
+.geo-3d-marker.selected .geo-3d-halo{outline:3px solid #fff;outline-offset:3px}
+.geo-3d-marker.fault .geo-3d-halo{animation:alarm-pulse 2s ease-out infinite}
+.osm-building-inspect{border:1px solid #dce4e1;padding:14px;margin-bottom:22px;border-radius:8px;background:#edf4f1}
+.osm-building-inspect h3{margin:10px 0;font-size:18px}.osm-building-inspect button{font-size:11px;padding:8px 11px}
+.map-inspector .region-device{padding:13px 0;border-bottom:1px solid #e0e5e1}.map-inspector{background:#fff}.map-inspector .sub{color:#727e82}
+@media(max-width:1120px){.campus-geospatial{height:500px}}
+@media(max-width:600px){.campus-geospatial{height:400px}.geo-3d-caption{max-width:220px;padding:10px}.geo-3d-name{font-size:9px;max-width:135px;overflow:hidden;text-overflow:ellipsis}.geo-3d-bottom{display:none}}
+@media(prefers-reduced-motion:reduce){.geo-3d-marker.fault .geo-3d-halo{animation:none}}
